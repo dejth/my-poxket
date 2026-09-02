@@ -12,6 +12,54 @@ export interface LoginInput {
   readonly username: string
 }
 
+export type Direction = 'income' | 'expense'
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'debit_card' | 'other'
+export type TransactionStatus = 'active' | 'superseded' | 'cancelled'
+
+export interface CategoryData {
+  readonly direction: Direction
+  readonly id: string
+  readonly isActive: boolean
+  readonly name: string
+}
+
+export interface TransactionData {
+  readonly amountMinor: string
+  readonly categoryDirection: Direction
+  readonly categoryId: string
+  readonly categoryName: string
+  readonly correctsTransactionId: string | null
+  readonly createdAt: string
+  readonly description: string
+  readonly direction: Direction
+  readonly id: string
+  readonly paymentMethod: PaymentMethod | 'credit_card'
+  readonly status: TransactionStatus
+  readonly transactionDate: string
+  readonly updatedAt: string
+}
+
+export interface TransactionInput {
+  readonly amount: string
+  readonly categoryId: string
+  readonly description: string
+  readonly direction: Direction
+  readonly paymentMethod: PaymentMethod
+  readonly transactionDate: string
+}
+
+export interface TransactionFilters {
+  readonly categoryId?: string | undefined
+  readonly dateFrom?: string | undefined
+  readonly dateTo?: string | undefined
+  readonly direction?: Direction | undefined
+  readonly paymentMethod?: PaymentMethod | undefined
+  readonly page?: number | undefined
+  readonly pageSize?: number | undefined
+  readonly search?: string | undefined
+  readonly status?: TransactionStatus | 'all' | undefined
+}
+
 interface ApiErrorBody {
   readonly error?: {
     readonly message?: string
@@ -47,6 +95,99 @@ export async function logout(csrfToken: string): Promise<void> {
   if (!response.ok) {
     await readJsonResponse(response)
   }
+}
+
+export async function getCategories(): Promise<readonly CategoryData[]> {
+  const response = await fetch('/api/categories', { credentials: 'include' })
+  const body = await readJsonResponse<{ items: CategoryData[] }>(response)
+  return body.items
+}
+
+export async function createCategory(
+  csrfToken: string,
+  input: Pick<CategoryData, 'direction' | 'name'>,
+): Promise<CategoryData> {
+  return mutateJson('/api/categories', csrfToken, input, 'POST')
+}
+
+export async function setCategoryStatus(
+  csrfToken: string,
+  categoryId: string,
+  isActive: boolean,
+): Promise<{ readonly id: string; readonly isActive: boolean }> {
+  return mutateJson(
+    `/api/categories/${categoryId}/status`,
+    csrfToken,
+    { isActive },
+    'PATCH',
+  )
+}
+
+export async function getTransactions(
+  filters: TransactionFilters = {},
+): Promise<{
+  readonly items: readonly TransactionData[]
+  readonly nextPage: number | null
+}> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, String(value))
+  }
+  const query = params.size > 0 ? `?${params.toString()}` : ''
+  const response = await fetch(`/api/transactions${query}`, {
+    credentials: 'include',
+  })
+  return readJsonResponse(response)
+}
+
+export function createTransaction(
+  csrfToken: string,
+  input: TransactionInput,
+): Promise<TransactionData> {
+  return mutateJson('/api/transactions', csrfToken, input, 'POST')
+}
+
+export function correctTransaction(
+  csrfToken: string,
+  transactionId: string,
+  input: TransactionInput,
+): Promise<TransactionData> {
+  return mutateJson(
+    `/api/transactions/${transactionId}/corrections`,
+    csrfToken,
+    input,
+    'POST',
+  )
+}
+
+export function cancelTransaction(
+  csrfToken: string,
+  transactionId: string,
+): Promise<TransactionData> {
+  return mutateJson(
+    `/api/transactions/${transactionId}/cancel`,
+    csrfToken,
+    undefined,
+    'POST',
+  )
+}
+
+async function mutateJson<T>(
+  url: string,
+  csrfToken: string,
+  body: unknown,
+  method: 'PATCH' | 'POST',
+): Promise<T> {
+  const response = await fetch(url, {
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    credentials: 'include',
+    headers: {
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      'x-csrf-token': csrfToken,
+    },
+    method,
+  })
+  return readJsonResponse<T>(response)
 }
 
 async function readJsonResponse<T>(response: Response): Promise<T> {

@@ -60,6 +60,18 @@ confirmation before implementation.
 - Store event timestamps in UTC.
 - Apply calendar-month arithmetic and clamp unavailable days to month end.
 
+## Transactions and categories
+
+- Categories are typed as `income` or `expense`, start empty, and can be
+  deactivated without breaking historical references.
+- Transactions use positive THB minor units up to `999,999,999.99`, with an
+  explicit income/expense direction and local calendar date.
+- Initial non-card payment methods are cash, bank transfer, debit card, and
+  other. Credit-card transaction entry remains disabled until Issue #3.
+- Corrections preserve the immutable original as `superseded` and create one
+  linked replacement atomically. Cancellation changes status without deleting
+  financial history.
+
 For an installment beginning `2025-10-05` with 60 installments, occurrence
 `1/60` is due `2025-10-05`, every later occurrence uses day 5, and `60/60` is
 due `2030-09-05`. Each occurrence will have explicit unpaid/paid/cancelled
@@ -117,7 +129,7 @@ No database dump is committed to Git.
 ## Delivery phases
 
 1. Issue #1 — Bootstrap and authentication foundation.
-2. Issue #2 — Transactions and categories.
+2. Issue #2 — Transactions and categories (owner UAT passed).
 3. Issue #3 — Credit cards, statements, and planned payments.
 4. Issue #4 — Installments with `N/N` and paid-state tracking.
 5. Issue #5 — Recurring expenses and idempotent occurrences.
