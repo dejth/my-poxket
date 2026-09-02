@@ -15,15 +15,15 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @my-poxket/domain && npm run build --workspace @my-poxket/api && npm run build --workspace @my-poxket/web",
-    "dev": "concurrently --kill-others-on-fail --names api,web \"npm run dev --workspace @my-poxket/api\" \"npm run dev --workspace @my-poxket/web\"",
+    "dev": "npm run build --workspace @my-poxket/domain && concurrently --kill-others-on-fail --names api,web \"npm run dev --workspace @my-poxket/api\" \"npm run dev --workspace @my-poxket/web\"",
     "dev:api": "npm run dev --workspace @my-poxket/api",
     "dev:web": "npm run dev --workspace @my-poxket/web",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "secret:scan": "docker run --rm --volume \"$PWD:/repo:ro\" --workdir /repo ghcr.io/gitleaks/gitleaks:v8.29.0 dir . --config .gitleaks.toml --redact --no-banner --no-color",
-    "test": "npm run test --workspace @my-poxket/domain && npm run test --workspace @my-poxket/api && npm run test --workspace @my-poxket/web",
-    "typecheck": "npm run typecheck --workspace @my-poxket/domain && npm run typecheck --workspace @my-poxket/api && npm run typecheck --workspace @my-poxket/web",
+    "test": "npm run build --workspace @my-poxket/domain && npm run test --workspace @my-poxket/domain && npm run test --workspace @my-poxket/api && npm run test --workspace @my-poxket/web",
+    "typecheck": "npm run build --workspace @my-poxket/domain && npm run typecheck --workspace @my-poxket/domain && npm run typecheck --workspace @my-poxket/api && npm run typecheck --workspace @my-poxket/web",
     "validate": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {

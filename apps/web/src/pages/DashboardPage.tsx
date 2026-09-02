@@ -1,43 +1,15 @@
-import type { SessionData } from '../app/api'
-
-interface DashboardPageProps {
-  readonly isSigningOut: boolean
-  readonly onSignOut: () => void
-  readonly session: SessionData
-}
-
-export function DashboardPage({
-  isSigningOut,
-  onSignOut,
-  session,
-}: DashboardPageProps) {
+export function DashboardPage() {
   return (
-    <main className="dashboard-shell">
-      <header className="app-header">
-        <div>
-          <p className="eyebrow">MY POXKET</p>
-          <h1>ภาพรวมการเงิน</h1>
-        </div>
-        <div className="account-actions">
-          <span>{session.user.username}</span>
-          <button
-            className="secondary-button"
-            disabled={isSigningOut}
-            onClick={onSignOut}
-            type="button"
-          >
-            {isSigningOut ? 'กำลังออก…' : 'ออกจากระบบ'}
-          </button>
-        </div>
+    <main className="page-shell">
+      <header className="page-header">
+        <p className="eyebrow">MY POXKET</p>
+        <h1>ภาพรวมการเงิน</h1>
       </header>
 
       <section className="empty-dashboard" aria-labelledby="ready-title">
-        <p className="status-pill">Foundation ready</p>
-        <h2 id="ready-title">พร้อมเริ่มบันทึกรายการใน Phase ถัดไป</h2>
-        <p>
-          Authentication, THB, Asia/Bangkok และฐานข้อมูล development
-          ถูกวางโครงสร้างไว้แล้ว
-        </p>
+        <p className="status-pill">พร้อมใช้งาน</p>
+        <h2 id="ready-title">เริ่มบันทึกรายรับและรายจ่ายได้แล้ว</h2>
+        <p>ข้อมูลกิจกรรมรายเดือนและยอดที่ต้องจ่ายจะเพิ่มใน Phase ถัดไป</p>
       </section>
     </main>
   )

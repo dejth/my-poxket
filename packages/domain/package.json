@@ -11,6 +11,10 @@
     "./money": {
       "types": "./dist/money.d.ts",
       "default": "./dist/money.js"
+    },
+    "./transactions": {
+      "types": "./dist/transactions.d.ts",
+      "default": "./dist/transactions.js"
     }
   },
   "scripts": {

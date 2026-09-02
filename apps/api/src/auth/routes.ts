@@ -1,12 +1,13 @@
 import argon2 from 'argon2'
-import { and, eq, gt } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
 import type { ApiConfig } from '../config.js'
 import type { Database } from '../database/client.js'
 import { sessions, users } from '../database/schema.js'
-import { createSessionRecord, hashSessionToken } from './session.js'
+import { findSession, getSessionCookieName } from './authorization.js'
+import { createSessionRecord } from './session.js'
 
 const loginSchema = z.object({
   password: z.string().min(1).max(256),
@@ -28,10 +29,7 @@ export async function registerAuthRoutes(
   app: FastifyInstance,
   { config, database }: AuthRoutesOptions,
 ) {
-  const cookieName =
-    config.nodeEnv === 'production'
-      ? '__Host-my_poxket_session'
-      : 'my_poxket_session'
+  const cookieName = getSessionCookieName(config.nodeEnv)
   const dummyPasswordHash = await argon2.hash('not-a-real-user-password', {
     type: argon2.argon2id,
   })
@@ -132,30 +130,4 @@ export async function registerAuthRoutes(
     })
     return reply.status(204).send()
   })
-}
-
-async function findSession(token: string | undefined, database: Database) {
-  if (!token) {
-    return undefined
-  }
-
-  const [session] = await database
-    .select({
-      csrfToken: sessions.csrfToken,
-      id: sessions.id,
-      role: users.role,
-      username: users.username,
-    })
-    .from(sessions)
-    .innerJoin(users, eq(users.id, sessions.userId))
-    .where(
-      and(
-        eq(sessions.tokenHash, hashSessionToken(token)),
-        gt(sessions.expiresAt, new Date()),
-        eq(users.isActive, true),
-      ),
-    )
-    .limit(1)
-
-  return session
 }

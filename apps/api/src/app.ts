@@ -6,6 +6,7 @@ import Fastify, { LogController } from 'fastify'
 import { registerAuthRoutes } from './auth/routes.js'
 import type { ApiConfig } from './config.js'
 import { createDatabase } from './database/client.js'
+import { registerFinanceRoutes } from './finance/routes.js'
 
 export async function createApp(config: ApiConfig) {
   const app = Fastify({
@@ -32,6 +33,7 @@ export async function createApp(config: ApiConfig) {
   }))
 
   await registerAuthRoutes(app, { config, database })
+  registerFinanceRoutes(app, { config, database })
 
   app.setErrorHandler((error, request, reply) => {
     const isRateLimited =

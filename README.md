@@ -117,8 +117,9 @@ source maps, and real financial information must never enter the repository.
 
 ## Project status
 
-Bootstrap and authentication foundation are tracked in Issue #1. Roadmap Issue
-#9 links the remaining transaction, card, installment, recurring-expense,
+Bootstrap and authentication foundation from Issue #1 is complete. Transactions
+and categories from Issue #2 are implemented and passed owner UAT.
+Roadmap Issue #9 links the remaining card, installment, recurring-expense,
 summary, responsive-polish, and production-readiness phases.
 
 See [PROJECT.md](./PROJECT.md) for the delivery plan and recorded decisions.

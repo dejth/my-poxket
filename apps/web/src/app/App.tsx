@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { getSession, login, logout } from './api'
 import type { LoginInput, SessionData } from './api'
-import { DashboardPage } from '../pages/DashboardPage'
+import { AppShell } from './AppShell'
 import { LoginPage } from '../pages/LoginPage'
 
 const SESSION_QUERY_KEY = ['session'] as const
@@ -49,7 +49,7 @@ export function App() {
   if (sessionQuery.data) {
     const session = sessionQuery.data
     return (
-      <DashboardPage
+      <AppShell
         isSigningOut={logoutMutation.isPending}
         onSignOut={() => logoutMutation.mutate(session.csrfToken)}
         session={session}
