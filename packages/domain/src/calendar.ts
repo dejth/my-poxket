@@ -75,6 +75,20 @@ export function calculateInstallmentEndDate(
   return addCalendarMonthsClamped(firstPaymentDate, totalInstallments - 1)
 }
 
+export function recurringDateForPeriod(
+  period: string,
+  recurrenceDay: number,
+): LocalDate {
+  if (!/^\d{4}-\d{2}$/.test(period)) throw new RangeError('Invalid period')
+  validateCardDay(recurrenceDay)
+  const { year, month } = parseLocalDate(`${period}-01`)
+  return dateForMonthDay(year, month, recurrenceDay)
+}
+
+export function nextMonthPeriod(localDate: string): string {
+  return addCalendarMonthsClamped(`${localDate.slice(0, 7)}-01`, 1).slice(0, 7)
+}
+
 export function calculateStatementEndDate(
   transactionDate: string,
   cutoffDay: number,

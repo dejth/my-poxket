@@ -349,6 +349,159 @@ export const installmentOccurrences = mysqlTable(
   ],
 )
 
+export const recurringExpenseRules = mysqlTable(
+  'recurring_expense_rules',
+  {
+    id: char('id', { length: 36 }).notNull(),
+    idempotencyKey: char('idempotency_key', { length: 36 }).notNull(),
+    description: varchar('description', { length: 255 }).notNull(),
+    amountMinor: bigint('amount_minor', {
+      mode: 'bigint',
+      unsigned: true,
+    }).notNull(),
+    currency: char('currency', { length: 3 }).notNull().default('THB'),
+    categoryId: char('category_id', { length: 36 })
+      .notNull()
+      .references(() => categories.id, { onDelete: 'restrict' }),
+    creditCardId: char('credit_card_id', { length: 36 }).references(
+      () => creditCards.id,
+      { onDelete: 'restrict' },
+    ),
+    paymentMethod: mysqlEnum('payment_method', [
+      'cash',
+      'bank_transfer',
+      'debit_card',
+      'other',
+      'credit_card',
+    ]).notNull(),
+    startDate: date('start_date', { mode: 'string' }).notNull(),
+    recurrenceDay: tinyint('recurrence_day', { unsigned: true }).notNull(),
+    status: mysqlEnum('status', ['active', 'stopped'])
+      .notNull()
+      .default('active'),
+    createdByUserId: char('created_by_user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: datetime('created_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: datetime('updated_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    uniqueIndex('recurring_expense_rules_idempotency_key_unique').on(
+      table.idempotencyKey,
+    ),
+    check(
+      'recurring_expense_rules_amount_range',
+      sql`${table.amountMinor} > 0 AND ${table.amountMinor} <= 99999999999`,
+    ),
+    check(
+      'recurring_expense_rules_currency_thb',
+      sql`${table.currency} = 'THB'`,
+    ),
+    check(
+      'recurring_expense_rules_day_range',
+      sql`${table.recurrenceDay} BETWEEN 1 AND 31`,
+    ),
+    check(
+      'recurring_expense_rules_credit_card_reference',
+      sql`(${table.paymentMethod} = 'credit_card' AND ${table.creditCardId} IS NOT NULL) OR (${table.paymentMethod} <> 'credit_card' AND ${table.creditCardId} IS NULL)`,
+    ),
+    index('recurring_expense_rules_status_index').on(table.status),
+  ],
+)
+
+export const recurringExpenseOccurrences = mysqlTable(
+  'recurring_expense_occurrences',
+  {
+    id: char('id', { length: 36 }).notNull(),
+    recurringExpenseRuleId: char('recurring_expense_rule_id', {
+      length: 36,
+    }).notNull(),
+    recurrencePeriod: char('recurrence_period', { length: 7 }).notNull(),
+    description: varchar('description', { length: 255 }).notNull(),
+    amountMinor: bigint('amount_minor', {
+      mode: 'bigint',
+      unsigned: true,
+    }).notNull(),
+    currency: char('currency', { length: 3 }).notNull().default('THB'),
+    categoryId: char('category_id', { length: 36 })
+      .notNull()
+      .references(() => categories.id, { onDelete: 'restrict' }),
+    creditCardId: char('credit_card_id', { length: 36 }).references(
+      () => creditCards.id,
+      { onDelete: 'restrict' },
+    ),
+    paymentMethod: mysqlEnum('payment_method', [
+      'cash',
+      'bank_transfer',
+      'debit_card',
+      'other',
+      'credit_card',
+    ]).notNull(),
+    dueDate: date('due_date', { mode: 'string' }).notNull(),
+    status: mysqlEnum('status', ['unpaid', 'paid', 'cancelled'])
+      .notNull()
+      .default('unpaid'),
+    paidDate: date('paid_date', { mode: 'string' }),
+    paidAmountMinor: bigint('paid_amount_minor', {
+      mode: 'bigint',
+      unsigned: true,
+    }),
+    createdAt: datetime('created_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: datetime('updated_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    foreignKey({
+      columns: [table.recurringExpenseRuleId],
+      foreignColumns: [recurringExpenseRules.id],
+      name: 'recurring_expense_occurrences_rule_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('recurring_expense_occurrences_rule_period_unique').on(
+      table.recurringExpenseRuleId,
+      table.recurrencePeriod,
+    ),
+    check(
+      'recurring_expense_occurrences_period_format',
+      sql`${table.recurrencePeriod} REGEXP '^[0-9]{4}-[0-9]{2}$'`,
+    ),
+    check(
+      'recurring_expense_occurrences_amount_range',
+      sql`${table.amountMinor} > 0 AND ${table.amountMinor} <= 99999999999`,
+    ),
+    check(
+      'recurring_expense_occurrences_currency_thb',
+      sql`${table.currency} = 'THB'`,
+    ),
+    check(
+      'recurring_expense_occurrences_credit_card_reference',
+      sql`(${table.paymentMethod} = 'credit_card' AND ${table.creditCardId} IS NOT NULL) OR (${table.paymentMethod} <> 'credit_card' AND ${table.creditCardId} IS NULL)`,
+    ),
+    check(
+      'recurring_expense_occurrences_paid_values',
+      sql`(${table.status} = 'paid' AND ${table.paidDate} IS NOT NULL AND ${table.paidAmountMinor} IS NOT NULL) OR (${table.status} <> 'paid' AND ${table.paidDate} IS NULL AND ${table.paidAmountMinor} IS NULL)`,
+    ),
+    check(
+      'recurring_expense_occurrences_paid_amount_range',
+      sql`${table.paidAmountMinor} IS NULL OR (${table.paidAmountMinor} > 0 AND ${table.paidAmountMinor} <= 99999999999)`,
+    ),
+    index('recurring_expense_occurrences_status_due_date_index').on(
+      table.status,
+      table.dueDate,
+    ),
+  ],
+)
+
 export const appSettings = mysqlTable('app_settings', {
   id: tinyint('id', { unsigned: true }).notNull().primaryKey(),
   currency: char('currency', { length: 3 }).notNull().default('THB'),

@@ -8,6 +8,7 @@ import { CategoriesPage } from './CategoriesPage'
 import { CreditCardsPage } from './CreditCardsPage'
 import { formatThbMinor } from './finance-format'
 import { InstallmentsPage } from './InstallmentsPage'
+import { RecurringExpensesPage } from './RecurringExpensesPage'
 import { TransactionsPage } from './TransactionsPage'
 
 const session = {
@@ -258,6 +259,63 @@ describe('finance pages', () => {
     expect(screen.getByText('แผน 11')).toBeInTheDocument()
     expect(screen.queryByText('แผน 1')).not.toBeInTheDocument()
   })
+
+  it('shows recurring rules separately and exposes explicit stop choices', async () => {
+    stubFinanceFetch({
+      categories: [],
+      recurring: [
+        {
+          amountMinor: '70000',
+          categoryId: '11111111-1111-4111-8111-111111111111',
+          categoryName: 'ค่าสมาชิกสมมติ',
+          createdAt: '2026-09-03T00:00:00.000Z',
+          creditCardId: null,
+          creditCardMaskedSuffix: null,
+          creditCardName: null,
+          description: 'บริการสมมติรายเดือน',
+          id: '77777777-7777-4777-8777-777777777777',
+          occurrences: [
+            {
+              amountMinor: '70000',
+              categoryId: '11111111-1111-4111-8111-111111111111',
+              categoryName: 'ค่าสมาชิกสมมติ',
+              creditCardId: null,
+              creditCardMaskedSuffix: null,
+              creditCardName: null,
+              description: 'บริการสมมติรายเดือน',
+              dueDate: '2026-09-10',
+              id: '88888888-8888-4888-8888-888888888888',
+              paidAmountMinor: null,
+              paidDate: null,
+              paymentMethod: 'bank_transfer',
+              recurrencePeriod: '2026-09',
+              status: 'unpaid',
+            },
+          ],
+          paymentMethod: 'bank_transfer',
+          recurrenceDay: 10,
+          startDate: '2026-09-10',
+          status: 'active',
+          updatedAt: '2026-09-03T00:00:00.000Z',
+        },
+      ],
+      transactions: [],
+    })
+    renderPage(<RecurringExpensesPage />)
+
+    expect(await screen.findByText('บริการสมมติรายเดือน')).toBeInTheDocument()
+    expect(screen.getAllByText(/ประจำ/).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'หยุดรายการประจำ' }))
+    expect(
+      screen.getByRole('dialog', { name: 'จัดการรายการอนาคต' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('ยกเลิกรายการอนาคตที่ยังไม่จ่าย'),
+    ).toBeChecked()
+    expect(
+      screen.getByLabelText('คงรายการที่สร้างไว้ให้จ่ายต่อ'),
+    ).toBeInTheDocument()
+  })
 })
 
 const fictionalCard = {
@@ -295,12 +353,14 @@ function stubFinanceFetch({
   cards = [],
   categories,
   plans = [],
+  recurring = [],
   statements = [],
   transactions,
 }: {
   cards?: readonly unknown[]
   categories: readonly unknown[]
   plans?: readonly unknown[]
+  recurring?: readonly unknown[]
   statements?: readonly unknown[]
   transactions: readonly unknown[]
 }) {
@@ -315,13 +375,15 @@ function stubFinanceFetch({
             : input.url
       const body = url.includes('/api/credit-card-statements')
         ? { items: statements }
-        : url.includes('/api/installment-plans')
-          ? { items: plans }
-          : url.includes('/api/credit-cards')
-            ? { items: cards }
-            : url.includes('/api/categories')
-              ? { items: categories }
-              : { items: transactions, nextPage: null }
+        : url.includes('/api/recurring-expenses')
+          ? { items: recurring }
+          : url.includes('/api/installment-plans')
+            ? { items: plans }
+            : url.includes('/api/credit-cards')
+              ? { items: cards }
+              : url.includes('/api/categories')
+                ? { items: categories }
+                : { items: transactions, nextPage: null }
       return Promise.resolve(
         new Response(JSON.stringify(body), {
           headers: { 'content-type': 'application/json' },

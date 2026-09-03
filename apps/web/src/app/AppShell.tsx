@@ -13,6 +13,7 @@ const navigation = [
   { label: 'รายการ', path: '/transactions' },
   { label: 'บัตร', path: '/credit-cards' },
   { label: 'ผ่อน', path: '/installments' },
+  { label: 'ประจำ', path: '/recurring-expenses' },
   { label: 'หมวดหมู่', path: '/categories' },
 ] as const
 

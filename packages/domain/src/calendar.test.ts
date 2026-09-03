@@ -7,9 +7,17 @@ import {
   calculatePlannedCardPaymentDate,
   calculateStatementEndDate,
   daysInMonth,
+  nextMonthPeriod,
+  recurringDateForPeriod,
 } from './calendar.js'
 
 describe('calendar rules', () => {
+  it('clamps recurring days and advances the materialization period', () => {
+    expect(recurringDateForPeriod('2026-02', 31)).toBe('2026-02-28')
+    expect(recurringDateForPeriod('2028-02', 31)).toBe('2028-02-29')
+    expect(nextMonthPeriod('2026-12-20')).toBe('2027-01')
+  })
+
   it('handles leap and non-leap February', () => {
     expect(daysInMonth(2028, 2)).toBe(29)
     expect(daysInMonth(2027, 2)).toBe(28)

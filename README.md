@@ -119,9 +119,10 @@ source maps, and real financial information must never enter the repository.
 
 Bootstrap and authentication foundation from Issue #1 is complete. Transactions
 and categories from Issue #2 are implemented and passed owner UAT.
-Credit cards and derived statements from Issue #3 are implemented locally and
-passed owner UAT. Roadmap Issue #9 links the remaining installment,
-recurring-expense, summary, responsive-polish, and production-readiness phases.
+Credit cards and derived statements from Issue #3 and installment tracking from
+Issue #4 are complete and passed owner UAT. Recurring expenses from Issue #5 are
+also complete and passed owner UAT. Roadmap Issue #9 links the remaining summary,
+responsive-polish, and production-readiness phases.
 
 See [PROJECT.md](./PROJECT.md) for the delivery plan and recorded decisions.
 

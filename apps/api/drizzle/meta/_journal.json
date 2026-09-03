@@ -50,6 +50,13 @@
       "when": 1788425146667,
       "tag": "0006_harsh_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1788451460952,
+      "tag": "0007_naive_blonde_phantom",
+      "breakpoints": true
     }
   ]
 }

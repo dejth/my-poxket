@@ -12,6 +12,8 @@ import {
   creditCards,
   installmentOccurrences,
   installmentPlans,
+  recurringExpenseOccurrences,
+  recurringExpenseRules,
   sessions,
   transactions,
   users,
@@ -40,6 +42,8 @@ describeWithDatabase('finance API with MariaDB', () => {
 
   beforeAll(async () => {
     await database.delete(sessions)
+    await database.delete(recurringExpenseOccurrences)
+    await database.delete(recurringExpenseRules)
     await database.delete(installmentOccurrences)
     await database.delete(installmentPlans)
     await deleteTransactionHistory()
@@ -67,6 +71,8 @@ describeWithDatabase('finance API with MariaDB', () => {
   })
 
   beforeEach(async () => {
+    await database.delete(recurringExpenseOccurrences)
+    await database.delete(recurringExpenseRules)
     await database.delete(installmentOccurrences)
     await database.delete(installmentPlans)
     await deleteTransactionHistory()
@@ -77,6 +83,8 @@ describeWithDatabase('finance API with MariaDB', () => {
   afterAll(async () => {
     if (app) await app.close()
     await database.delete(sessions)
+    await database.delete(recurringExpenseOccurrences)
+    await database.delete(recurringExpenseRules)
     await database.delete(installmentOccurrences)
     await database.delete(installmentPlans)
     await deleteTransactionHistory()
@@ -100,6 +108,13 @@ describeWithDatabase('finance API with MariaDB', () => {
       url: '/api/categories',
     })
     expect(forbidden.statusCode).toBe(403)
+
+    const materializeWithoutCsrf = await app.inject({
+      headers: { cookie },
+      method: 'POST',
+      url: '/api/recurring-expenses/materialize',
+    })
+    expect(materializeWithoutCsrf.statusCode).toBe(403)
   })
 
   it('creates, filters, and preserves transactions with inactive categories', async () => {
@@ -657,6 +672,168 @@ describeWithDatabase('finance API with MariaDB', () => {
     ).toBe(true)
   })
 
+  it('materializes recurring months once and clamps short months', async () => {
+    const category = await createCategory('expense', 'ค่าสมาชิกสมมติ')
+    const idempotencyKey = randomUUID()
+    const payload = {
+      amount: '700',
+      categoryId: category.id,
+      description: 'บริการสมมติรายเดือน',
+      idempotencyKey,
+      paymentMethod: 'bank_transfer',
+      recurrenceDay: 31,
+      startDate: '2026-01-31',
+    }
+    const responses = await Promise.all([
+      createRecurringExpenseResponse(payload),
+      createRecurringExpenseResponse(payload),
+    ])
+    expect(responses.map(({ statusCode }) => statusCode)).toEqual([201, 201])
+    const rules = responses.map((response) =>
+      response.json<{
+        id: string
+        occurrences: { dueDate: string; recurrencePeriod: string }[]
+      }>(),
+    )
+    expect(rules[0]!.id).toBe(rules[1]!.id)
+    expect(rules[0]!.occurrences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dueDate: '2026-01-31',
+          recurrencePeriod: '2026-01',
+        }),
+        expect.objectContaining({
+          dueDate: '2026-02-28',
+          recurrencePeriod: '2026-02',
+        }),
+      ]),
+    )
+
+    const rows = await database
+      .select({ period: recurringExpenseOccurrences.recurrencePeriod })
+      .from(recurringExpenseOccurrences)
+    expect(new Set(rows.map(({ period }) => period)).size).toBe(rows.length)
+  })
+
+  it('preserves paid history, edits future periods, and stops explicitly', async () => {
+    const category = await createCategory('expense', 'บริการรายเดือนสมมติ')
+    const today = bangkokToday()
+    const currentPeriod = today.slice(0, 7)
+    const nextPeriod = nextPeriodAfter(currentPeriod)
+    const createdResponse = await createRecurringExpenseResponse({
+      amount: '100',
+      categoryId: category.id,
+      description: 'รายการประจำเดิม',
+      idempotencyKey: randomUUID(),
+      paymentMethod: 'cash',
+      recurrenceDay: 1,
+      startDate: '2026-01-01',
+    })
+    expect(createdResponse.statusCode).toBe(201)
+    const created = createdResponse.json<{ id: string }>()
+
+    const paid = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: { paidAmount: '100', paidDate: '2026-01-01', status: 'paid' },
+      url: `/api/recurring-expenses/${created.id}/occurrences/2026-01`,
+    })
+    expect(paid.statusCode).toBe(200)
+
+    const edited = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        amount: '125',
+        categoryId: category.id,
+        description: 'รายการประจำใหม่',
+        paymentMethod: 'cash',
+        recurrenceDay: 15,
+        startDate: '2026-01-01',
+      },
+      url: `/api/recurring-expenses/${created.id}`,
+    })
+    expect(edited.statusCode).toBe(200)
+    const editedRule = edited.json<{
+      occurrences: {
+        amountMinor: string
+        description: string
+        recurrencePeriod: string
+        status: string
+      }[]
+    }>()
+    expect(
+      editedRule.occurrences.find(
+        ({ recurrencePeriod }) => recurrencePeriod === '2026-01',
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        amountMinor: '10000',
+        description: 'รายการประจำเดิม',
+        status: 'paid',
+      }),
+    )
+    expect(
+      editedRule.occurrences.find(
+        ({ recurrencePeriod }) => recurrencePeriod === currentPeriod,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        amountMinor: '12500',
+        description: 'รายการประจำใหม่',
+      }),
+    )
+
+    const stopped = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      payload: { futureOccurrences: 'cancel' },
+      url: `/api/recurring-expenses/${created.id}/stop`,
+    })
+    expect(stopped.statusCode).toBe(200)
+    const stoppedRule = stopped.json<{
+      occurrences: { recurrencePeriod: string; status: string }[]
+      status: string
+    }>()
+    expect(stoppedRule.status).toBe('stopped')
+    expect(
+      stoppedRule.occurrences.find(
+        ({ recurrencePeriod }) => recurrencePeriod === nextPeriod,
+      ),
+    ).toEqual(expect.objectContaining({ status: 'cancelled' }))
+    expect(
+      stoppedRule.occurrences.find(
+        ({ recurrencePeriod }) => recurrencePeriod === '2026-01',
+      ),
+    ).toEqual(expect.objectContaining({ status: 'paid' }))
+
+    const retainedResponse = await createRecurringExpenseResponse({
+      amount: '50',
+      categoryId: category.id,
+      description: 'รายการที่คงไว้',
+      idempotencyKey: randomUUID(),
+      paymentMethod: 'cash',
+      recurrenceDay: 28,
+      startDate: `${currentPeriod}-01`,
+    })
+    const retainedRule = retainedResponse.json<{ id: string }>()
+    const retained = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      payload: { futureOccurrences: 'retain' },
+      url: `/api/recurring-expenses/${retainedRule.id}/stop`,
+    })
+    expect(
+      retained
+        .json<{
+          occurrences: { recurrencePeriod: string; status: string }[]
+        }>()
+        .occurrences.find(
+          ({ recurrencePeriod }) => recurrencePeriod === nextPeriod,
+        ),
+    ).toEqual(expect.objectContaining({ status: 'unpaid' }))
+  })
+
   it('validates card configuration and duplicate names', async () => {
     await createCreditCard({
       cutoffDay: 31,
@@ -744,6 +921,17 @@ describeWithDatabase('finance API with MariaDB', () => {
     })
   }
 
+  function createRecurringExpenseResponse(
+    input: Record<string, string | number>,
+  ) {
+    return app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      payload: input,
+      url: '/api/recurring-expenses',
+    })
+  }
+
   async function getStatements(cardId: string) {
     const response = await app.inject({
       headers: { cookie },
@@ -804,3 +992,22 @@ describeWithDatabase('finance API with MariaDB', () => {
     }
   }
 })
+
+function bangkokToday() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value]),
+  )
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function nextPeriodAfter(period: string) {
+  const [year, month] = period.split('-').map(Number)
+  const monthIndex = (year ?? 0) * 12 + (month ?? 1)
+  return `${Math.floor(monthIndex / 12)}-${String((monthIndex % 12) + 1).padStart(2, '0')}`
+}
