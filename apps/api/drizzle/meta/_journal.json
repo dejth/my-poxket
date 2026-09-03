@@ -22,6 +22,34 @@
       "when": 1788402024703,
       "tag": "0002_thin_hannibal_king",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1788418601730,
+      "tag": "0003_fancy_tyger_tiger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1788421722056,
+      "tag": "0004_bizarre_violations",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1788423564945,
+      "tag": "0005_flippant_bulldozer",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1788425146667,
+      "tag": "0006_harsh_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

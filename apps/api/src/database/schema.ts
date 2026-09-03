@@ -7,10 +7,12 @@ import {
   check,
   date,
   datetime,
+  foreignKey,
   index,
   mysqlEnum,
   mysqlTable,
   primaryKey,
+  smallint,
   tinyint,
   uniqueIndex,
   varchar,
@@ -206,6 +208,143 @@ export const transactions = mysqlTable(
       table.creditCardId,
       table.status,
       table.transactionDate,
+    ),
+  ],
+)
+
+export const installmentPlans = mysqlTable(
+  'installment_plans',
+  {
+    id: char('id', { length: 36 }).notNull(),
+    idempotencyKey: char('idempotency_key', { length: 36 }).notNull(),
+    description: varchar('description', { length: 255 }).notNull(),
+    totalAmountMinor: bigint('total_amount_minor', {
+      mode: 'bigint',
+      unsigned: true,
+    }),
+    currency: char('currency', { length: 3 }).notNull().default('THB'),
+    categoryId: char('category_id', { length: 36 })
+      .notNull()
+      .references(() => categories.id, { onDelete: 'restrict' }),
+    creditCardId: char('credit_card_id', { length: 36 }).references(
+      () => creditCards.id,
+      { onDelete: 'restrict' },
+    ),
+    paymentMethod: mysqlEnum('payment_method', [
+      'cash',
+      'bank_transfer',
+      'debit_card',
+      'other',
+      'credit_card',
+    ]).notNull(),
+    firstPaymentDate: date('first_payment_date', { mode: 'string' }).notNull(),
+    totalInstallments: smallint('total_installments', {
+      unsigned: true,
+    }).notNull(),
+    status: mysqlEnum('status', ['active', 'completed', 'settled', 'cancelled'])
+      .notNull()
+      .default('active'),
+    createdByUserId: char('created_by_user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: datetime('created_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: datetime('updated_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    uniqueIndex('installment_plans_idempotency_key_unique').on(
+      table.idempotencyKey,
+    ),
+    check(
+      'installment_plans_amount_positive',
+      sql`${table.totalAmountMinor} IS NULL OR ${table.totalAmountMinor} > 0`,
+    ),
+    check(
+      'installment_plans_amount_maximum',
+      sql`${table.totalAmountMinor} IS NULL OR ${table.totalAmountMinor} <= 99999999999`,
+    ),
+    check('installment_plans_currency_thb', sql`${table.currency} = 'THB'`),
+    check(
+      'installment_plans_total_installments_positive',
+      sql`${table.totalInstallments} > 0`,
+    ),
+    check(
+      'installment_plans_credit_card_reference',
+      sql`(${table.paymentMethod} = 'credit_card' AND ${table.creditCardId} IS NOT NULL) OR (${table.paymentMethod} <> 'credit_card' AND ${table.creditCardId} IS NULL)`,
+    ),
+    index('installment_plans_status_index').on(table.status),
+  ],
+)
+
+export const installmentOccurrences = mysqlTable(
+  'installment_occurrences',
+  {
+    id: char('id', { length: 36 }).notNull(),
+    installmentPlanId: char('installment_plan_id', { length: 36 }).notNull(),
+    installmentNumber: smallint('installment_number', {
+      unsigned: true,
+    }).notNull(),
+    amountMinor: bigint('amount_minor', {
+      mode: 'bigint',
+      unsigned: true,
+    }).notNull(),
+    dueDate: date('due_date', { mode: 'string' }).notNull(),
+    status: mysqlEnum('status', ['unpaid', 'paid', 'cancelled'])
+      .notNull()
+      .default('unpaid'),
+    paidDate: date('paid_date', { mode: 'string' }),
+    paidAmountMinor: bigint('paid_amount_minor', {
+      mode: 'bigint',
+      unsigned: true,
+    }),
+    closesPlan: boolean('closes_plan').notNull().default(false),
+    createdAt: datetime('created_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: datetime('updated_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    foreignKey({
+      columns: [table.installmentPlanId],
+      foreignColumns: [installmentPlans.id],
+      name: 'installment_occurrences_plan_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('installment_occurrences_plan_number_unique').on(
+      table.installmentPlanId,
+      table.installmentNumber,
+    ),
+    check(
+      'installment_occurrences_number_positive',
+      sql`${table.installmentNumber} > 0`,
+    ),
+    check(
+      'installment_occurrences_amount_positive',
+      sql`${table.amountMinor} > 0`,
+    ),
+    check(
+      'installment_occurrences_paid_amount_positive',
+      sql`${table.paidAmountMinor} IS NULL OR (${table.paidAmountMinor} > 0 AND ${table.paidAmountMinor} <= 99999999999)`,
+    ),
+    check(
+      'installment_occurrences_paid_date_status',
+      sql`(${table.status} = 'paid' AND ${table.paidDate} IS NOT NULL AND ${table.paidAmountMinor} IS NOT NULL) OR (${table.status} <> 'paid' AND ${table.paidDate} IS NULL AND ${table.paidAmountMinor} IS NULL)`,
+    ),
+    check(
+      'installment_occurrences_closes_plan_paid',
+      sql`${table.closesPlan} = 0 OR ${table.status} = 'paid'`,
+    ),
+    index('installment_occurrences_status_due_date_index').on(
+      table.status,
+      table.dueDate,
     ),
   ],
 )

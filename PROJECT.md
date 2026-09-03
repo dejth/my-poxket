@@ -54,8 +54,11 @@ confirmation before implementation.
 - Direction comes from income/expense classification, not amount sign.
 - Parse and round decimal input without binary floating point.
 - Apply round-half-up at two THB decimal places.
-- When a total cannot divide evenly across installments, apply the remainder
-  to the final installment so occurrences sum exactly to the original total.
+- Record an optional reference total and a required planned payment per
+  installment; do not infer one from the other because financing costs may
+  differ from the original loan or purchase amount.
+- Record the exact amount paid on each occurrence; it may differ from the
+  planned installment amount.
 - Treat transaction, due, and payment dates as local calendar dates.
 - Store event timestamps in UTC.
 - Apply calendar-month arithmetic and clamp unavailable days to month end.
@@ -76,8 +79,22 @@ confirmation before implementation.
 
 For an installment beginning `2025-10-05` with 60 installments, occurrence
 `1/60` is due `2025-10-05`, every later occurrence uses day 5, and `60/60` is
-due `2030-09-05`. Each occurrence will have explicit unpaid/paid/cancelled
-status so the user can check whether the current installment was paid.
+due `2030-09-05`. Each occurrence has explicit unpaid/paid/cancelled status and
+records the actual paid amount and date when paid.
+
+All finite installment occurrences are created atomically with the plan. A
+client-generated idempotency key prevents duplicate plans on retry, while a
+unique plan-and-installment-number constraint prevents duplicate occurrences.
+Marking the final installment paid completes the plan; reverting a payment
+reopens it. Cancelling a plan cancels only unpaid occurrences and preserves paid
+history. These payable occurrences remain separate from transaction activity so
+Issue #6 can avoid double counting.
+
+An installment payment can be marked as closing the plan early. That occurrence
+records the actual payoff amount and date, remaining unpaid occurrences are
+cancelled atomically, and the plan is labeled `settled` rather than completed.
+Reverting the payoff reopens those remaining occurrences without changing prior
+paid history.
 
 A recurring rule beginning `2026-09-10` uses day 10 as its monthly occurrence
 day. Occurrences will be materialized idempotently from the rule; the exact

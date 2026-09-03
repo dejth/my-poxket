@@ -14,6 +14,7 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@my-poxket/domain": "0.0.0",
     "@fontsource-variable/anuphan": "5.3.0",
     "@hookform/resolvers": "5.2.2",
     "@tanstack/react-query": "5.102.8",

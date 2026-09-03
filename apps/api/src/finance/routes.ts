@@ -10,18 +10,22 @@ import type { ApiConfig } from '../config.js'
 import type { Database } from '../database/client.js'
 import { FinanceError } from './errors.js'
 import {
+  cancelInstallmentPlan,
   cancelTransaction,
   correctTransaction,
   createCategory,
   createCreditCard,
+  createInstallmentPlan,
   createTransaction,
   getTransaction,
   listCategories,
   listCreditCards,
   listCreditCardStatements,
+  listInstallmentPlans,
   listTransactions,
   setCategoryActive,
   setCreditCardActive,
+  setInstallmentOccurrenceStatus,
 } from './service.js'
 
 const directionSchema = z.enum(['income', 'expense'])
@@ -61,6 +65,26 @@ const transactionInputSchema = z.object({
   paymentMethod: paymentMethodSchema,
   transactionDate: localDateSchema,
 })
+const installmentPlanInputSchema = z.object({
+  categoryId: identifierSchema,
+  creditCardId: identifierSchema.nullish(),
+  description: z.string().min(1).max(255),
+  firstPaymentDate: localDateSchema,
+  idempotencyKey: identifierSchema,
+  installmentAmount: z.string().min(1).max(32),
+  paymentMethod: paymentMethodSchema,
+  totalAmount: z.string().min(1).max(32).optional(),
+  totalInstallments: z.number().int().min(1).max(65_535),
+})
+const installmentStatusSchema = z.discriminatedUnion('status', [
+  z.object({
+    closesPlan: z.boolean().default(false),
+    paidAmount: z.string().min(1).max(32),
+    paidDate: localDateSchema,
+    status: z.literal('paid'),
+  }),
+  z.object({ status: z.literal('unpaid') }),
+])
 const transactionQuerySchema = z
   .object({
     categoryId: identifierSchema.optional(),
@@ -221,6 +245,84 @@ export function registerFinanceRoutes(
       return sendInvalidInput(reply, query.error.issues[0]?.message)
 
     return reply.send(await listTransactions(database, query.data))
+  })
+
+  app.get('/api/installment-plans', async (request, reply) => {
+    const session = await authenticate(request, reply, cookieName, database)
+    if (!session) return
+    return reply.send({ items: await listInstallmentPlans(database) })
+  })
+
+  app.post('/api/installment-plans', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    const input = installmentPlanInputSchema.safeParse(request.body)
+    if (!input.success) return sendInvalidInput(reply)
+
+    try {
+      return reply
+        .status(201)
+        .send(await createInstallmentPlan(database, session.userId, input.data))
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.patch(
+    '/api/installment-plans/:id/occurrences/:installmentNumber',
+    async (request, reply) => {
+      const session = await authorizeMutation(
+        request,
+        reply,
+        cookieName,
+        database,
+      )
+      if (!session) return
+      const params = z
+        .object({
+          id: identifierSchema,
+          installmentNumber: z.coerce.number().int().min(1).max(65_535),
+        })
+        .safeParse(request.params)
+      const input = installmentStatusSchema.safeParse(request.body)
+      if (!params.success || !input.success) return sendInvalidInput(reply)
+
+      try {
+        return reply.send(
+          await setInstallmentOccurrenceStatus(
+            database,
+            params.data.id,
+            params.data.installmentNumber,
+            input.data,
+          ),
+        )
+      } catch (error) {
+        return sendFinanceError(reply, error)
+      }
+    },
+  )
+
+  app.post('/api/installment-plans/:id/cancel', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    const params = z.object({ id: identifierSchema }).safeParse(request.params)
+    if (!params.success) return sendInvalidInput(reply)
+
+    try {
+      return reply.send(await cancelInstallmentPlan(database, params.data.id))
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
   })
 
   app.get('/api/transactions/:id', async (request, reply) => {
