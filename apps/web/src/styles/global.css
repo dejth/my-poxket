@@ -424,9 +424,41 @@ a:focus-visible {
   min-width: 0;
 }
 
+.card-rule-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.statement-section {
+  margin-top: 2rem;
+}
+
+.statement-dates {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+}
+
+.statement-dates dt {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+
+.statement-dates dd {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
 .compact-form,
 .category-list {
   padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.compact-form > .primary-button {
+  margin-top: 1rem;
 }
 
 .section-heading {
@@ -654,6 +686,17 @@ a:focus-visible {
   white-space: normal;
 }
 
+.statement-table td:first-child {
+  width: 100%;
+  min-width: 12rem;
+}
+
+.statement-table td:nth-child(2) {
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .desktop-transaction-table tr:last-child td {
   border-bottom: 0;
 }
@@ -869,7 +912,7 @@ a:focus-visible {
     inset: auto 0 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     min-height: calc(4rem + env(safe-area-inset-bottom));
     padding: 0.35rem 0.5rem env(safe-area-inset-bottom);
     border-top: 1px solid var(--color-border);

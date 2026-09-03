@@ -92,6 +92,39 @@ export const categories = mysqlTable(
   ],
 )
 
+export const creditCards = mysqlTable(
+  'credit_cards',
+  {
+    id: char('id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 100 }).notNull(),
+    normalizedName: varchar('normalized_name', { length: 100 }).notNull(),
+    maskedSuffix: char('masked_suffix', { length: 4 }),
+    cutoffDay: tinyint('cutoff_day', { unsigned: true }).notNull(),
+    dueDay: tinyint('due_day', { unsigned: true }).notNull(),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: datetime('created_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: datetime('updated_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    uniqueIndex('credit_cards_name_unique').on(table.normalizedName),
+    check(
+      'credit_cards_masked_suffix_format',
+      sql`${table.maskedSuffix} IS NULL OR ${table.maskedSuffix} REGEXP '^[0-9]{4}$'`,
+    ),
+    check(
+      'credit_cards_cutoff_day_range',
+      sql`${table.cutoffDay} BETWEEN 1 AND 31`,
+    ),
+    check('credit_cards_due_day_range', sql`${table.dueDay} BETWEEN 1 AND 31`),
+  ],
+)
+
 export const transactions = mysqlTable(
   'transactions',
   {
@@ -107,6 +140,10 @@ export const transactions = mysqlTable(
     categoryId: char('category_id', { length: 36 })
       .notNull()
       .references(() => categories.id, { onDelete: 'restrict' }),
+    creditCardId: char('credit_card_id', { length: 36 }).references(
+      () => creditCards.id,
+      { onDelete: 'restrict' },
+    ),
     paymentMethod: mysqlEnum('payment_method', [
       'cash',
       'bank_transfer',
@@ -145,6 +182,10 @@ export const transactions = mysqlTable(
       'transactions_credit_card_expense_only',
       sql`${table.paymentMethod} <> 'credit_card' OR ${table.direction} = 'expense'`,
     ),
+    check(
+      'transactions_credit_card_reference',
+      sql`(${table.paymentMethod} = 'credit_card' AND ${table.creditCardId} IS NOT NULL) OR (${table.paymentMethod} <> 'credit_card' AND ${table.creditCardId} IS NULL)`,
+    ),
     uniqueIndex('transactions_correction_unique').on(
       table.correctsTransactionId,
     ),
@@ -158,6 +199,11 @@ export const transactions = mysqlTable(
       table.transactionDate,
     ),
     index('transactions_status_date_index').on(
+      table.status,
+      table.transactionDate,
+    ),
+    index('transactions_card_status_date_index').on(
+      table.creditCardId,
       table.status,
       table.transactionDate,
     ),

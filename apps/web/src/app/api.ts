@@ -13,7 +13,8 @@ export interface LoginInput {
 }
 
 export type Direction = 'income' | 'expense'
-export type PaymentMethod = 'cash' | 'bank_transfer' | 'debit_card' | 'other'
+export type PaymentMethod =
+  'cash' | 'bank_transfer' | 'debit_card' | 'other' | 'credit_card'
 export type TransactionStatus = 'active' | 'superseded' | 'cancelled'
 
 export interface CategoryData {
@@ -23,17 +24,40 @@ export interface CategoryData {
   readonly name: string
 }
 
+export interface CreditCardData {
+  readonly cutoffDay: number
+  readonly dueDay: number
+  readonly id: string
+  readonly isActive: boolean
+  readonly maskedSuffix: string | null
+  readonly name: string
+}
+
+export interface CreditCardStatementData {
+  readonly amountMinor: string
+  readonly cardId: string
+  readonly cardName: string
+  readonly maskedSuffix: string | null
+  readonly officialDueDate: string
+  readonly plannedPaymentDate: string
+  readonly purchaseCount: number
+  readonly statementEndDate: string
+}
+
 export interface TransactionData {
   readonly amountMinor: string
   readonly categoryDirection: Direction
   readonly categoryId: string
   readonly categoryName: string
+  readonly creditCardId: string | null
+  readonly creditCardMaskedSuffix: string | null
+  readonly creditCardName: string | null
   readonly correctsTransactionId: string | null
   readonly createdAt: string
   readonly description: string
   readonly direction: Direction
   readonly id: string
-  readonly paymentMethod: PaymentMethod | 'credit_card'
+  readonly paymentMethod: PaymentMethod
   readonly status: TransactionStatus
   readonly transactionDate: string
   readonly updatedAt: string
@@ -42,6 +66,7 @@ export interface TransactionData {
 export interface TransactionInput {
   readonly amount: string
   readonly categoryId: string
+  readonly creditCardId?: string | null | undefined
   readonly description: string
   readonly direction: Direction
   readonly paymentMethod: PaymentMethod
@@ -50,6 +75,7 @@ export interface TransactionInput {
 
 export interface TransactionFilters {
   readonly categoryId?: string | undefined
+  readonly creditCardId?: string | undefined
   readonly dateFrom?: string | undefined
   readonly dateTo?: string | undefined
   readonly direction?: Direction | undefined
@@ -121,6 +147,55 @@ export async function setCategoryStatus(
     { isActive },
     'PATCH',
   )
+}
+
+export async function getCreditCards(): Promise<readonly CreditCardData[]> {
+  const response = await fetch('/api/credit-cards', { credentials: 'include' })
+  const body = await readJsonResponse<{ items: CreditCardData[] }>(response)
+  return body.items
+}
+
+export function createCreditCard(
+  csrfToken: string,
+  input: {
+    readonly cutoffDay: number
+    readonly dueDay: number
+    readonly maskedSuffix?: string | undefined
+    readonly name: string
+  },
+): Promise<CreditCardData> {
+  return mutateJson('/api/credit-cards', csrfToken, input, 'POST')
+}
+
+export function setCreditCardStatus(
+  csrfToken: string,
+  creditCardId: string,
+  isActive: boolean,
+): Promise<{ readonly id: string; readonly isActive: boolean }> {
+  return mutateJson(
+    `/api/credit-cards/${creditCardId}/status`,
+    csrfToken,
+    { isActive },
+    'PATCH',
+  )
+}
+
+export async function getCreditCardStatements(filters: {
+  readonly cardId?: string | undefined
+  readonly dateFrom: string
+  readonly dateTo: string
+}): Promise<readonly CreditCardStatementData[]> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value)
+  }
+  const response = await fetch(`/api/credit-card-statements?${params}`, {
+    credentials: 'include',
+  })
+  const body = await readJsonResponse<{ items: CreditCardStatementData[] }>(
+    response,
+  )
+  return body.items
 }
 
 export async function getTransactions(

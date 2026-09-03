@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -10,6 +10,7 @@ import {
   setCategoryStatus,
   type Direction,
 } from '../app/api'
+import { ActionNotice } from '../app/ActionNotice'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 
 const CATEGORIES_QUERY_KEY = ['categories'] as const
@@ -53,12 +54,6 @@ export function CategoriesPage() {
 
   const categories = categoriesQuery.data ?? []
 
-  useEffect(() => {
-    if (!notice) return
-    const timeoutId = window.setTimeout(() => setNotice(null), 3500)
-    return () => window.clearTimeout(timeoutId)
-  }, [notice])
-
   return (
     <main className="page-shell">
       <header className="page-header">
@@ -67,18 +62,7 @@ export function CategoriesPage() {
         <p>แยกรายรับและรายจ่ายให้ค้นหาและสรุปผลได้ชัดเจน</p>
       </header>
 
-      {notice ? (
-        <div className="action-notice" role="status">
-          <span>{notice}</span>
-          <button
-            aria-label="ปิดข้อความ"
-            onClick={() => setNotice(null)}
-            type="button"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
+      <ActionNotice message={notice} setMessage={setNotice} />
 
       <section className="category-layout">
         <form

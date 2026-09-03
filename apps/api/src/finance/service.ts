@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  addCalendarMonthsClamped,
+  calculateCardDueDate,
+  calculatePlannedCardPaymentDate,
+  calculateStatementEndDate,
+} from '@my-poxket/domain/calendar'
+import {
   nextTransactionStatus,
   parseTransactionAmount,
   validateCategoryDirection,
@@ -9,31 +15,34 @@ import {
 import { and, asc, desc, eq, gte, like, lte, type SQL } from 'drizzle-orm'
 
 import type { Database } from '../database/client.js'
-import { categories, transactions } from '../database/schema.js'
+import { categories, creditCards, transactions } from '../database/schema.js'
 import { FinanceError, isDuplicateEntry } from './errors.js'
 
 export type Direction = 'income' | 'expense'
 export type NonCardPaymentMethod =
   'cash' | 'bank_transfer' | 'debit_card' | 'other'
+export type PaymentMethod = NonCardPaymentMethod | 'credit_card'
 export type TransactionLifecycle = 'active' | 'superseded' | 'cancelled'
 
 export interface TransactionInput {
   readonly amount: string
   readonly categoryId: string
+  readonly creditCardId?: string | null | undefined
   readonly description: string
   readonly direction: Direction
-  readonly paymentMethod: NonCardPaymentMethod
+  readonly paymentMethod: PaymentMethod
   readonly transactionDate: string
 }
 
 export interface TransactionFilters {
   readonly categoryId?: string | undefined
+  readonly creditCardId?: string | undefined
   readonly dateFrom?: string | undefined
   readonly dateTo?: string | undefined
   readonly direction?: Direction | undefined
   readonly page: number
   readonly pageSize: number
-  readonly paymentMethod?: NonCardPaymentMethod | undefined
+  readonly paymentMethod?: PaymentMethod | undefined
   readonly search?: string | undefined
   readonly status?: TransactionLifecycle | 'all' | undefined
 }
@@ -45,12 +54,15 @@ interface TransactionRow {
   readonly categoryDirection: Direction
   readonly categoryId: string
   readonly categoryName: string
+  readonly creditCardId: string | null
+  readonly creditCardMaskedSuffix: string | null
+  readonly creditCardName: string | null
   readonly correctsTransactionId: string | null
   readonly createdAt: Date
   readonly description: string
   readonly direction: Direction
   readonly id: string
-  readonly paymentMethod: NonCardPaymentMethod | 'credit_card'
+  readonly paymentMethod: PaymentMethod
   readonly status: TransactionLifecycle
   readonly transactionDate: string
   readonly updatedAt: Date
@@ -61,6 +73,9 @@ const transactionSelection = {
   categoryDirection: categories.direction,
   categoryId: categories.id,
   categoryName: categories.name,
+  creditCardId: creditCards.id,
+  creditCardMaskedSuffix: creditCards.maskedSuffix,
+  creditCardName: creditCards.name,
   correctsTransactionId: transactions.correctsTransactionId,
   createdAt: transactions.createdAt,
   description: transactions.description,
@@ -141,6 +156,192 @@ export async function setCategoryActive(
   return { id: categoryId, isActive }
 }
 
+export async function listCreditCards(database: Database) {
+  return database
+    .select({
+      cutoffDay: creditCards.cutoffDay,
+      dueDay: creditCards.dueDay,
+      id: creditCards.id,
+      isActive: creditCards.isActive,
+      maskedSuffix: creditCards.maskedSuffix,
+      name: creditCards.name,
+    })
+    .from(creditCards)
+    .orderBy(asc(creditCards.name))
+}
+
+export async function createCreditCard(
+  database: Database,
+  input: {
+    readonly cutoffDay: number
+    readonly dueDay: number
+    readonly maskedSuffix?: string | undefined
+    readonly name: string
+  },
+) {
+  const name = normalizeCardName(input.name)
+  const card = {
+    cutoffDay: input.cutoffDay,
+    dueDay: input.dueDay,
+    id: randomUUID(),
+    isActive: true,
+    maskedSuffix: input.maskedSuffix ?? null,
+    name,
+    normalizedName: name.toLocaleLowerCase('th-TH'),
+  } as const
+
+  try {
+    await database.insert(creditCards).values(card)
+  } catch (error) {
+    if (isDuplicateEntry(error)) {
+      throw new FinanceError(
+        'CREDIT_CARD_ALREADY_EXISTS',
+        'มีชื่อบัตรนี้อยู่แล้ว กรุณาเปิดใช้งานรายการเดิม',
+        409,
+      )
+    }
+    throw error
+  }
+
+  return {
+    cutoffDay: card.cutoffDay,
+    dueDay: card.dueDay,
+    id: card.id,
+    isActive: card.isActive,
+    maskedSuffix: card.maskedSuffix,
+    name: card.name,
+  }
+}
+
+export async function setCreditCardActive(
+  database: Database,
+  creditCardId: string,
+  isActive: boolean,
+) {
+  const [card] = await database
+    .select({ id: creditCards.id })
+    .from(creditCards)
+    .where(eq(creditCards.id, creditCardId))
+    .limit(1)
+
+  if (!card) {
+    throw new FinanceError('CREDIT_CARD_NOT_FOUND', 'ไม่พบบัตรเครดิต', 404)
+  }
+
+  await database
+    .update(creditCards)
+    .set({ isActive })
+    .where(eq(creditCards.id, creditCardId))
+  return { id: creditCardId, isActive }
+}
+
+export async function listCreditCardStatements(
+  database: Database,
+  filters: {
+    readonly cardId?: string | undefined
+    readonly dateFrom: string
+    readonly dateTo: string
+  },
+) {
+  const conditions: SQL[] = [
+    eq(transactions.paymentMethod, 'credit_card'),
+    eq(transactions.status, 'active'),
+    gte(
+      transactions.transactionDate,
+      addCalendarMonthsClamped(`${filters.dateFrom.slice(0, 7)}-01`, -1),
+    ),
+    lte(transactions.transactionDate, filters.dateTo),
+  ]
+  if (filters.cardId) conditions.push(eq(creditCards.id, filters.cardId))
+
+  const rows = await database
+    .select({
+      amountMinor: transactions.amountMinor,
+      cardId: creditCards.id,
+      cardName: creditCards.name,
+      cutoffDay: creditCards.cutoffDay,
+      dueDay: creditCards.dueDay,
+      maskedSuffix: creditCards.maskedSuffix,
+      transactionDate: transactions.transactionDate,
+    })
+    .from(transactions)
+    .innerJoin(creditCards, eq(creditCards.id, transactions.creditCardId))
+    .where(and(...conditions))
+    .limit(5001)
+
+  if (rows.length > 5000) {
+    throw new FinanceError(
+      'STATEMENT_RANGE_TOO_LARGE',
+      'ช่วงข้อมูลกว้างเกินไป กรุณาระบุช่วงวันที่ให้แคบลง',
+    )
+  }
+
+  const grouped = new Map<
+    string,
+    {
+      amountMinor: bigint
+      cardId: string
+      cardName: string
+      maskedSuffix: string | null
+      purchaseCount: number
+      statementEndDate: string
+      dueDay: number
+    }
+  >()
+
+  for (const row of rows) {
+    const statementEndDate = calculateStatementEndDate(
+      row.transactionDate,
+      row.cutoffDay,
+    )
+    if (
+      statementEndDate < filters.dateFrom ||
+      statementEndDate > filters.dateTo
+    ) {
+      continue
+    }
+
+    const key = `${row.cardId}:${statementEndDate}`
+    const current = grouped.get(key)
+    if (current) {
+      current.amountMinor += row.amountMinor
+      current.purchaseCount += 1
+    } else {
+      grouped.set(key, {
+        amountMinor: row.amountMinor,
+        cardId: row.cardId,
+        cardName: row.cardName,
+        dueDay: row.dueDay,
+        maskedSuffix: row.maskedSuffix,
+        purchaseCount: 1,
+        statementEndDate,
+      })
+    }
+  }
+
+  return [...grouped.values()]
+    .map(({ dueDay, ...statement }) => {
+      const officialDueDate = calculateCardDueDate(
+        statement.statementEndDate,
+        dueDay,
+      )
+      return {
+        ...statement,
+        amountMinor: statement.amountMinor.toString(),
+        officialDueDate,
+        plannedPaymentDate: calculatePlannedCardPaymentDate(
+          statement.statementEndDate,
+          officialDueDate,
+        ),
+      }
+    })
+    .toSorted(
+      (left, right) =>
+        right.statementEndDate.localeCompare(left.statementEndDate) ||
+        left.cardName.localeCompare(right.cardName, 'th'),
+    )
+}
+
 export async function listTransactions(
   database: Database,
   filters: TransactionFilters,
@@ -155,6 +356,9 @@ export async function listTransactions(
   }
   if (filters.categoryId) {
     conditions.push(eq(transactions.categoryId, filters.categoryId))
+  }
+  if (filters.creditCardId) {
+    conditions.push(eq(transactions.creditCardId, filters.creditCardId))
   }
   if (filters.paymentMethod) {
     conditions.push(eq(transactions.paymentMethod, filters.paymentMethod))
@@ -175,6 +379,7 @@ export async function listTransactions(
     .select(transactionSelection)
     .from(transactions)
     .innerJoin(categories, eq(categories.id, transactions.categoryId))
+    .leftJoin(creditCards, eq(creditCards.id, transactions.creditCardId))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(transactions.transactionDate), desc(transactions.createdAt))
     .limit(filters.pageSize + 1)
@@ -195,6 +400,7 @@ export async function getTransaction(
     .select(transactionSelection)
     .from(transactions)
     .innerJoin(categories, eq(categories.id, transactions.categoryId))
+    .leftJoin(creditCards, eq(creditCards.id, transactions.creditCardId))
     .where(eq(transactions.id, transactionId))
     .limit(1)
 
@@ -225,6 +431,7 @@ export async function correctTransaction(
     const [original] = await transaction
       .select({
         categoryId: transactions.categoryId,
+        creditCardId: transactions.creditCardId,
         id: transactions.id,
         status: transactions.status,
       })
@@ -240,6 +447,9 @@ export async function correctTransaction(
     const nextStatus = transitionTransactionStatus(original.status, 'correct')
     const values = await prepareTransactionValues(transaction, userId, input, {
       allowInactiveCategoryId: original.categoryId,
+      ...(original.creditCardId
+        ? { allowInactiveCreditCardId: original.creditCardId }
+        : {}),
       correctsTransactionId: original.id,
     })
 
@@ -285,6 +495,7 @@ async function prepareTransactionValues(
   input: TransactionInput,
   options: {
     readonly allowInactiveCategoryId?: string
+    readonly allowInactiveCreditCardId?: string
     readonly correctsTransactionId?: string
   } = {},
 ) {
@@ -309,21 +520,48 @@ async function prepareTransactionValues(
     )
   }
 
+  const creditCardId = input.creditCardId ?? null
+  if ((input.paymentMethod === 'credit_card') !== Boolean(creditCardId)) {
+    throw new FinanceError(
+      'INVALID_CREDIT_CARD_REFERENCE',
+      'รายการบัตรเครดิตต้องเลือกบัตร และรายการประเภทอื่นต้องไม่ผูกบัตร',
+    )
+  }
+
+  if (creditCardId) {
+    const [card] = await database
+      .select({ id: creditCards.id, isActive: creditCards.isActive })
+      .from(creditCards)
+      .where(eq(creditCards.id, creditCardId))
+      .limit(1)
+    if (!card) {
+      throw new FinanceError('CREDIT_CARD_NOT_FOUND', 'ไม่พบบัตรเครดิต', 404)
+    }
+    if (!card.isActive && card.id !== options.allowInactiveCreditCardId) {
+      throw new FinanceError(
+        'CREDIT_CARD_INACTIVE',
+        'บัตรเครดิตนี้ถูกปิดใช้งานแล้ว',
+        409,
+      )
+    }
+  }
+
   try {
     validateCategoryDirection(input.direction, category.direction)
-    validatePaymentMethod(input.direction, input.paymentMethod)
-  } catch (error) {
+    validatePaymentMethod(input.direction, input.paymentMethod, {
+      creditCardsEnabled: true,
+    })
+  } catch {
     throw new FinanceError(
       'INVALID_TRANSACTION_RULE',
-      error instanceof Error && error.message.includes('not available')
-        ? 'รายการบัตรเครดิตจะเปิดใช้งานใน Phase ถัดไป'
-        : 'ประเภทหมวดหมู่หรือวิธีชำระเงินไม่ตรงกับรายการ',
+      'ประเภทหมวดหมู่หรือวิธีชำระเงินไม่ตรงกับรายการ',
     )
   }
 
   return {
     amountMinor: parseAmount(input.amount),
     categoryId: category.id,
+    creditCardId,
     correctsTransactionId: options.correctsTransactionId,
     createdByUserId: userId,
     currency: 'THB' as const,
@@ -334,6 +572,17 @@ async function prepareTransactionValues(
     status: 'active' as const,
     transactionDate: input.transactionDate,
   }
+}
+
+function normalizeCardName(value: string): string {
+  const normalized = value.trim().replaceAll(/\s+/g, ' ')
+  if (normalized.length < 1 || normalized.length > 100) {
+    throw new FinanceError(
+      'INVALID_CREDIT_CARD_NAME',
+      'ชื่อบัตรเครดิตต้องมี 1–100 ตัวอักษร',
+    )
+  }
+  return normalized
 }
 
 function parseAmount(amount: string): bigint {

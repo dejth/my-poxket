@@ -9,6 +9,7 @@ import type { ApiConfig } from '../config.js'
 import { createDatabase } from '../database/client.js'
 import {
   categories,
+  creditCards,
   sessions,
   transactions,
   users,
@@ -38,6 +39,7 @@ describeWithDatabase('finance API with MariaDB', () => {
   beforeAll(async () => {
     await database.delete(sessions)
     await database.delete(transactions)
+    await database.delete(creditCards)
     await database.delete(categories)
     await database.delete(users).where(eq(users.username, username))
     await database.insert(users).values({
@@ -62,6 +64,7 @@ describeWithDatabase('finance API with MariaDB', () => {
 
   beforeEach(async () => {
     await deleteTransactionHistory()
+    await database.delete(creditCards)
     await database.delete(categories)
   })
 
@@ -69,6 +72,7 @@ describeWithDatabase('finance API with MariaDB', () => {
     await app.close()
     await database.delete(sessions)
     await deleteTransactionHistory()
+    await database.delete(creditCards)
     await database.delete(categories)
     await database.delete(users).where(eq(users.id, userId))
     await connection.end()
@@ -323,6 +327,136 @@ describeWithDatabase('finance API with MariaDB', () => {
     ).rejects.toThrow()
   })
 
+  it('assigns card purchases to derived statements and preserves inactive history', async () => {
+    const category = await createCategory('expense', 'ค่าใช้จ่ายบัตรสมมติ')
+    const card = await createCreditCard({
+      cutoffDay: 17,
+      dueDay: 1,
+      maskedSuffix: '1234',
+      name: 'บัตรตัวอย่าง',
+    })
+
+    await createTransaction(category.id, {
+      amount: '100',
+      creditCardId: card.id,
+      description: 'ก่อนวันตัดรอบ',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      transactionDate: '2026-09-16',
+    })
+    await createTransaction(category.id, {
+      amount: '200',
+      creditCardId: card.id,
+      description: 'ตรงวันตัดรอบ',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      transactionDate: '2026-09-17',
+    })
+    const afterCutoff = await createTransaction(category.id, {
+      amount: '300',
+      creditCardId: card.id,
+      description: 'หลังวันตัดรอบ',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      transactionDate: '2026-09-18',
+    })
+
+    const statements = await getStatements(card.id)
+    expect(statements).toEqual([
+      expect.objectContaining({
+        amountMinor: '30000',
+        officialDueDate: '2026-11-01',
+        plannedPaymentDate: '2026-10-31',
+        purchaseCount: 1,
+        statementEndDate: '2026-10-17',
+      }),
+      expect.objectContaining({
+        amountMinor: '30000',
+        officialDueDate: '2026-10-01',
+        plannedPaymentDate: '2026-09-30',
+        purchaseCount: 2,
+        statementEndDate: '2026-09-17',
+      }),
+    ])
+
+    const deactivated = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: { isActive: false },
+      url: `/api/credit-cards/${card.id}/status`,
+    })
+    expect(deactivated.statusCode).toBe(200)
+
+    const blocked = await createTransactionResponse(category.id, {
+      amount: '10',
+      creditCardId: card.id,
+      description: 'รายการใหม่บนบัตรที่ปิด',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      transactionDate: '2026-09-20',
+    })
+    expect(blocked.statusCode).toBe(409)
+
+    const correction = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      payload: {
+        amount: '350',
+        categoryId: category.id,
+        creditCardId: card.id,
+        description: 'ย้ายกลับรอบเดิม',
+        direction: 'expense',
+        paymentMethod: 'credit_card',
+        transactionDate: '2026-09-17',
+      },
+      url: `/api/transactions/${afterCutoff.id}/corrections`,
+    })
+    expect(correction.statusCode).toBe(201)
+
+    expect(await getStatements(card.id)).toEqual([
+      expect.objectContaining({
+        amountMinor: '65000',
+        purchaseCount: 3,
+        statementEndDate: '2026-09-17',
+      }),
+    ])
+  })
+
+  it('validates card configuration and duplicate names', async () => {
+    await createCreditCard({
+      cutoffDay: 31,
+      dueDay: 5,
+      maskedSuffix: '5678',
+      name: 'บัตรทดสอบ',
+    })
+
+    const duplicate = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      payload: {
+        cutoffDay: 17,
+        dueDay: 1,
+        name: '  บัตรทดสอบ  ',
+      },
+      url: '/api/credit-cards',
+    })
+    expect(duplicate.statusCode).toBe(409)
+
+    for (const payload of [
+      { cutoffDay: 0, dueDay: 1, name: 'วันไม่ถูกต้อง' },
+      { cutoffDay: 17, dueDay: 32, name: 'วันไม่ถูกต้อง' },
+      { cutoffDay: 17, dueDay: 1, maskedSuffix: '123', name: 'เลขไม่ครบ' },
+    ]) {
+      const response = await app.inject({
+        headers: { cookie, 'x-csrf-token': csrfToken },
+        method: 'POST',
+        payload,
+        url: '/api/credit-cards',
+      })
+      expect(response.statusCode).toBe(400)
+    }
+  })
+
   async function createCategory(direction: 'income' | 'expense', name: string) {
     const response = await app.inject({
       headers: { cookie, 'x-csrf-token': csrfToken },
@@ -332,6 +466,32 @@ describeWithDatabase('finance API with MariaDB', () => {
     })
     expect(response.statusCode).toBe(201)
     return response.json<{ id: string }>()
+  }
+
+  async function createCreditCard(input: {
+    cutoffDay: number
+    dueDay: number
+    maskedSuffix?: string
+    name: string
+  }) {
+    const response = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      payload: input,
+      url: '/api/credit-cards',
+    })
+    expect(response.statusCode).toBe(201)
+    return response.json<{ id: string }>()
+  }
+
+  async function getStatements(cardId: string) {
+    const response = await app.inject({
+      headers: { cookie },
+      method: 'GET',
+      url: `/api/credit-card-statements?cardId=${cardId}&dateFrom=2026-09-01&dateTo=2026-10-31`,
+    })
+    expect(response.statusCode).toBe(200)
+    return response.json<{ items: unknown[] }>().items
   }
 
   async function createTransaction(

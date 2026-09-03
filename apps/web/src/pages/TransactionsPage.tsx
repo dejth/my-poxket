@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
@@ -10,30 +17,52 @@ import {
   correctTransaction,
   createTransaction,
   getCategories,
+  getCreditCards,
   getTransactions,
   type CategoryData,
+  type CreditCardData,
   type Direction,
   type PaymentMethod,
   type TransactionData,
   type TransactionFilters,
   type TransactionInput,
 } from '../app/api'
+import { ActionNotice } from '../app/ActionNotice'
 import { useAuthenticatedContext } from '../app/authenticated-context'
-import { formatThbMinor } from './finance-format'
+import {
+  formatThaiDate,
+  formatThbMinor,
+  todayInBangkok,
+} from './finance-format'
 
-const transactionSchema = z.object({
-  amount: z
-    .string()
-    .trim()
-    .regex(/^\d+(?:\.\d{1,3})?$/, 'กรุณาระบุจำนวนเงินให้ถูกต้อง'),
-  categoryId: z.string().min(1, 'กรุณาเลือกหมวดหมู่'),
-  description: z.string().trim().min(1, 'กรุณาระบุรายละเอียด').max(255),
-  direction: z.enum(['income', 'expense']),
-  paymentMethod: z.enum(['cash', 'bank_transfer', 'debit_card', 'other']),
-  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'กรุณาเลือกวันที่'),
-})
+const transactionSchema = z
+  .object({
+    amount: z
+      .string()
+      .trim()
+      .regex(/^\d+(?:\.\d{1,3})?$/, 'กรุณาระบุจำนวนเงินให้ถูกต้อง'),
+    categoryId: z.string().min(1, 'กรุณาเลือกหมวดหมู่'),
+    creditCardId: z.string().optional(),
+    description: z.string().trim().min(1, 'กรุณาระบุรายละเอียด').max(255),
+    direction: z.enum(['income', 'expense']),
+    paymentMethod: z.enum([
+      'cash',
+      'bank_transfer',
+      'debit_card',
+      'other',
+      'credit_card',
+    ]),
+    transactionDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'กรุณาเลือกวันที่'),
+  })
+  .refine(
+    ({ creditCardId, paymentMethod }) =>
+      paymentMethod !== 'credit_card' || Boolean(creditCardId),
+    { message: 'กรุณาเลือกบัตรเครดิต', path: ['creditCardId'] },
+  )
 
-const paymentLabels: Record<PaymentMethod | 'credit_card', string> = {
+const paymentLabels: Record<PaymentMethod, string> = {
   bank_transfer: 'โอนเงิน',
   cash: 'เงินสด',
   credit_card: 'บัตรเครดิต',
@@ -61,6 +90,10 @@ export function TransactionsPage() {
     queryFn: getCategories,
     queryKey: ['categories'],
   })
+  const creditCardsQuery = useQuery({
+    queryFn: getCreditCards,
+    queryKey: ['credit-cards'],
+  })
   const transactionsQuery = useQuery({
     queryFn: () => getTransactions(filters),
     queryKey: ['transactions', filters],
@@ -69,12 +102,16 @@ export function TransactionsPage() {
     mutationFn: (id: string) => cancelTransaction(session.csrfToken, id),
     onSuccess: async () => {
       setNotice('ยกเลิกรายการแล้ว ประวัติยังคงอยู่')
-      await queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+        queryClient.invalidateQueries({ queryKey: ['credit-card-statements'] }),
+      ])
     },
   })
 
   const transactions = transactionsQuery.data?.items ?? []
   const categories = categoriesQuery.data ?? []
+  const creditCards = creditCardsQuery.data ?? []
   const activeFormTarget = formTarget ?? (quickAddRequested ? 'new' : null)
 
   const closeForm = useCallback(() => {
@@ -84,12 +121,6 @@ export function TransactionsPage() {
     nextParams.delete('action')
     setSearchParams(nextParams, { replace: true })
   }, [quickAddRequested, searchParams, setSearchParams])
-
-  useEffect(() => {
-    if (!notice) return
-    const timeoutId = window.setTimeout(() => setNotice(null), 3500)
-    return () => window.clearTimeout(timeoutId)
-  }, [notice])
 
   return (
     <main className="page-shell">
@@ -110,22 +141,12 @@ export function TransactionsPage() {
 
       <TransactionFilterBar
         categories={categories}
+        creditCards={creditCards}
         filters={filters}
         onApply={(next) => setFilters({ ...next, page: 1, pageSize: 25 })}
       />
 
-      {notice ? (
-        <div className="action-notice" role="status">
-          <span>{notice}</span>
-          <button
-            aria-label="ปิดข้อความ"
-            onClick={() => setNotice(null)}
-            type="button"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
+      <ActionNotice message={notice} setMessage={setNotice} />
       {cancelMutation.isError ? (
         <p className="inline-error" role="alert">
           {cancelMutation.error.message}
@@ -136,13 +157,19 @@ export function TransactionsPage() {
         className="surface transaction-surface"
         aria-label="รายการการเงิน"
       >
-        {transactionsQuery.isPending || categoriesQuery.isPending ? (
+        {transactionsQuery.isPending ||
+        categoriesQuery.isPending ||
+        creditCardsQuery.isPending ? (
           <p className="muted-state" aria-busy="true">
             กำลังโหลดรายการ…
           </p>
-        ) : transactionsQuery.isError || categoriesQuery.isError ? (
+        ) : transactionsQuery.isError ||
+          categoriesQuery.isError ||
+          creditCardsQuery.isError ? (
           <p className="inline-error" role="alert">
-            {transactionsQuery.error?.message ?? categoriesQuery.error?.message}
+            {transactionsQuery.error?.message ??
+              categoriesQuery.error?.message ??
+              creditCardsQuery.error?.message}
           </p>
         ) : transactions.length === 0 ? (
           <div className="empty-list">
@@ -214,6 +241,7 @@ export function TransactionsPage() {
       {activeFormTarget ? (
         <TransactionFormDialog
           categories={categories}
+          creditCards={creditCards}
           onClose={closeForm}
           onSaved={async () => {
             setNotice(
@@ -222,7 +250,12 @@ export function TransactionsPage() {
                 : 'แก้ไขรายการแล้ว พร้อมเก็บประวัติเดิม',
             )
             closeForm()
-            await queryClient.invalidateQueries({ queryKey: ['transactions'] })
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+              queryClient.invalidateQueries({
+                queryKey: ['credit-card-statements'],
+              }),
+            ])
           }}
           sessionCsrfToken={session.csrfToken}
           target={activeFormTarget}
@@ -234,10 +267,12 @@ export function TransactionsPage() {
 
 function TransactionFilterBar({
   categories,
+  creditCards,
   filters,
   onApply,
 }: {
   readonly categories: readonly CategoryData[]
+  readonly creditCards: readonly CreditCardData[]
   readonly filters: TransactionFilters
   readonly onApply: (filters: TransactionFilters) => void
 }) {
@@ -328,18 +363,32 @@ function TransactionFilterBar({
           value={draft.paymentMethod ?? ''}
         >
           <option value="">ทั้งหมด</option>
-          {(
-            Object.entries(paymentLabels) as [
-              PaymentMethod | 'credit_card',
-              string,
-            ][]
-          )
-            .filter(([method]) => method !== 'credit_card')
-            .map(([method, label]) => (
+          {(Object.entries(paymentLabels) as [PaymentMethod, string][]).map(
+            ([method, label]) => (
               <option key={method} value={method}>
                 {label}
               </option>
-            ))}
+            ),
+          )}
+        </select>
+      </label>
+      <label>
+        บัตรเครดิต
+        <select
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              creditCardId: event.target.value || undefined,
+            }))
+          }
+          value={draft.creditCardId ?? ''}
+        >
+          <option value="">ทั้งหมด</option>
+          {creditCards.map((card) => (
+            <option key={card.id} value={card.id}>
+              {formatCardName(card)}
+            </option>
+          ))}
         </select>
       </label>
       <label>
@@ -377,12 +426,14 @@ function TransactionFilterBar({
 
 function TransactionFormDialog({
   categories,
+  creditCards,
   onClose,
   onSaved,
   sessionCsrfToken,
   target,
 }: {
   readonly categories: readonly CategoryData[]
+  readonly creditCards: readonly CreditCardData[]
   readonly onClose: () => void
   readonly onSaved: () => Promise<void>
   readonly sessionCsrfToken: string
@@ -395,6 +446,7 @@ function TransactionFormDialog({
         ? {
             amount: '',
             categoryId: '',
+            creditCardId: '',
             description: '',
             direction: 'expense',
             paymentMethod: 'cash',
@@ -403,12 +455,10 @@ function TransactionFormDialog({
         : {
             amount: minorToInput(target.amountMinor),
             categoryId: target.categoryId,
+            creditCardId: target.creditCardId ?? '',
             description: target.description,
             direction: target.direction,
-            paymentMethod:
-              target.paymentMethod === 'credit_card'
-                ? 'other'
-                : target.paymentMethod,
+            paymentMethod: target.paymentMethod,
             transactionDate: target.transactionDate,
           },
     [target],
@@ -418,17 +468,30 @@ function TransactionFormDialog({
     resolver: zodResolver(transactionSchema),
   })
   const direction = useWatch({ control: form.control, name: 'direction' })
+  const paymentMethod = useWatch({
+    control: form.control,
+    name: 'paymentMethod',
+  })
   const availableCategories = categories.filter(
     (category) =>
       category.direction === direction &&
       (category.isActive ||
         (target !== 'new' && category.id === target.categoryId)),
   )
+  const availableCreditCards = creditCards.filter(
+    (card) =>
+      card.isActive || (target !== 'new' && card.id === target.creditCardId),
+  )
   const saveMutation = useMutation({
-    mutationFn: (input: TransactionInput) =>
-      target === 'new'
-        ? createTransaction(sessionCsrfToken, input)
-        : correctTransaction(sessionCsrfToken, target.id, input),
+    mutationFn: (input: TransactionInput) => {
+      const normalizedInput = {
+        ...input,
+        creditCardId: input.creditCardId || null,
+      }
+      return target === 'new'
+        ? createTransaction(sessionCsrfToken, normalizedInput)
+        : correctTransaction(sessionCsrfToken, target.id, normalizedInput)
+    },
     onSuccess: onSaved,
   })
   const closeButtonRef = useRef<HTMLButtonElement>(null)
@@ -485,7 +548,10 @@ function TransactionFormDialog({
                 type="radio"
                 value="expense"
                 {...form.register('direction', {
-                  onChange: () => form.setValue('categoryId', ''),
+                  onChange: () => {
+                    form.setValue('categoryId', '')
+                    form.setValue('creditCardId', '')
+                  },
                 })}
               />
               รายจ่าย
@@ -495,7 +561,11 @@ function TransactionFormDialog({
                 type="radio"
                 value="income"
                 {...form.register('direction', {
-                  onChange: () => form.setValue('categoryId', ''),
+                  onChange: () => {
+                    form.setValue('categoryId', '')
+                    form.setValue('creditCardId', '')
+                    form.setValue('paymentMethod', 'cash')
+                  },
                 })}
               />
               รายรับ
@@ -545,14 +615,20 @@ function TransactionFormDialog({
           </label>
           <label className="field">
             วิธีชำระ
-            <select {...form.register('paymentMethod')}>
-              {(
-                Object.entries(paymentLabels) as [
-                  PaymentMethod | 'credit_card',
-                  string,
-                ][]
-              )
-                .filter(([method]) => method !== 'credit_card')
+            <select
+              {...form.register('paymentMethod', {
+                onChange: (event: ChangeEvent<HTMLSelectElement>) => {
+                  if (event.target.value !== 'credit_card') {
+                    form.setValue('creditCardId', '')
+                  }
+                },
+              })}
+            >
+              {(Object.entries(paymentLabels) as [PaymentMethod, string][])
+                .filter(
+                  ([method]) =>
+                    direction === 'expense' || method !== 'credit_card',
+                )
                 .map(([method, label]) => (
                   <option key={method} value={method}>
                     {label}
@@ -560,6 +636,24 @@ function TransactionFormDialog({
                 ))}
             </select>
           </label>
+
+          {paymentMethod === 'credit_card' ? (
+            <label className="field">
+              บัตรเครดิต
+              <select {...form.register('creditCardId')}>
+                <option value="">เลือกบัตรเครดิต</option>
+                {availableCreditCards.map((card) => (
+                  <option key={card.id} value={card.id}>
+                    {formatCardName(card)}
+                    {card.isActive ? '' : ' (ปิดใช้งาน)'}
+                  </option>
+                ))}
+              </select>
+              {form.formState.errors.creditCardId ? (
+                <small>{form.formState.errors.creditCardId.message}</small>
+              ) : null}
+            </label>
+          ) : null}
 
           {saveMutation.isError ? (
             <p className="form-error" role="alert">
@@ -618,7 +712,7 @@ function TransactionTable({
               <td>{formatThaiDate(item.transactionDate)}</td>
               <td>{item.description}</td>
               <td>{item.categoryName}</td>
-              <td>{paymentLabels[item.paymentMethod]}</td>
+              <td>{formatPayment(item)}</td>
               <td>
                 <StatusLabel status={item.status} />
               </td>
@@ -663,7 +757,7 @@ function TransactionCards({
             </strong>
           </div>
           <div className="transaction-card-meta">
-            <span>{paymentLabels[item.paymentMethod]}</span>
+            <span>{formatPayment(item)}</span>
             <StatusLabel status={item.status} />
             <TransactionActions
               item={item}
@@ -727,23 +821,14 @@ function minorToInput(value: string): string {
   return `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`
 }
 
-function formatThaiDate(value: string): string {
-  return new Intl.DateTimeFormat('th-TH', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(`${value}T00:00:00+07:00`))
+function formatCardName(card: Pick<CreditCardData, 'maskedSuffix' | 'name'>) {
+  return card.maskedSuffix
+    ? `${card.name} •••• ${card.maskedSuffix}`
+    : card.name
 }
 
-function todayInBangkok(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'Asia/Bangkok',
-    year: 'numeric',
-  }).formatToParts(new Date())
-  const values = Object.fromEntries(
-    parts.map((part) => [part.type, part.value]),
-  )
-  return `${values.year}-${values.month}-${values.day}`
+function formatPayment(item: TransactionData): string {
+  return item.paymentMethod === 'credit_card' && item.creditCardName
+    ? `บัตรเครดิต · ${formatCardName({ maskedSuffix: item.creditCardMaskedSuffix, name: item.creditCardName })}`
+    : paymentLabels[item.paymentMethod]
 }
