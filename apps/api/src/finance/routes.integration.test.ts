@@ -10,6 +10,8 @@ import { createDatabase } from '../database/client.js'
 import {
   categories,
   creditCards,
+  installmentOccurrences,
+  installmentPlans,
   sessions,
   transactions,
   users,
@@ -38,7 +40,9 @@ describeWithDatabase('finance API with MariaDB', () => {
 
   beforeAll(async () => {
     await database.delete(sessions)
-    await database.delete(transactions)
+    await database.delete(installmentOccurrences)
+    await database.delete(installmentPlans)
+    await deleteTransactionHistory()
     await database.delete(creditCards)
     await database.delete(categories)
     await database.delete(users).where(eq(users.username, username))
@@ -63,14 +67,18 @@ describeWithDatabase('finance API with MariaDB', () => {
   })
 
   beforeEach(async () => {
+    await database.delete(installmentOccurrences)
+    await database.delete(installmentPlans)
     await deleteTransactionHistory()
     await database.delete(creditCards)
     await database.delete(categories)
   })
 
   afterAll(async () => {
-    await app.close()
+    if (app) await app.close()
     await database.delete(sessions)
+    await database.delete(installmentOccurrences)
+    await database.delete(installmentPlans)
     await deleteTransactionHistory()
     await database.delete(creditCards)
     await database.delete(categories)
@@ -422,6 +430,233 @@ describeWithDatabase('finance API with MariaDB', () => {
     ])
   })
 
+  it('generates exact installments once across concurrent retries', async () => {
+    const category = await createCategory('expense', 'ผ่อนชำระสมมติ')
+    const idempotencyKey = randomUUID()
+    const payload = {
+      categoryId: category.id,
+      description: 'อุปกรณ์ตัวอย่าง',
+      firstPaymentDate: '2026-01-31',
+      idempotencyKey,
+      installmentAmount: '10.00',
+      paymentMethod: 'bank_transfer',
+      totalAmount: '100.00',
+      totalInstallments: 10,
+    }
+    const responses = await Promise.all([
+      createInstallmentPlanResponse(payload),
+      createInstallmentPlanResponse(payload),
+    ])
+    expect(responses.map(({ statusCode }) => statusCode)).toEqual([201, 201])
+
+    const plans = responses.map((response) =>
+      response.json<{
+        endDate: string
+        id: string
+        occurrences: { amountMinor: string; installmentNumber: number }[]
+      }>(),
+    )
+    expect(plans[0]!.id).toBe(plans[1]!.id)
+    expect(plans[0]!.endDate).toBe('2026-10-31')
+    expect(plans[0]!.occurrences).toHaveLength(10)
+    expect(plans[0]!.occurrences.at(-1)).toEqual(
+      expect.objectContaining({
+        amountMinor: '1000',
+        installmentNumber: 10,
+      }),
+    )
+
+    const rows = await database
+      .select({ id: installmentPlans.id })
+      .from(installmentPlans)
+    const occurrences = await database
+      .select({ id: installmentOccurrences.id })
+      .from(installmentOccurrences)
+    expect(rows).toHaveLength(1)
+    expect(occurrences).toHaveLength(10)
+  })
+
+  it('tracks paid state, completes N/N, and rejects N+1/N', async () => {
+    const category = await createCategory('expense', 'งวดเดียวสมมติ')
+    const created = await createInstallmentPlan({
+      categoryId: category.id,
+      description: 'แผนหนึ่งงวด',
+      firstPaymentDate: '2026-09-03',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '700',
+      paymentMethod: 'cash',
+      totalAmount: '700',
+      totalInstallments: 1,
+    })
+
+    const paid = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        paidAmount: '700',
+        paidDate: '2026-09-03',
+        status: 'paid',
+      },
+      url: `/api/installment-plans/${created.id}/occurrences/1`,
+    })
+    expect(paid.statusCode).toBe(200)
+    expect(
+      paid.json<{ occurrences: { status: string }[]; status: string }>(),
+    ).toEqual(
+      expect.objectContaining({
+        occurrences: [expect.objectContaining({ status: 'paid' })],
+        status: 'completed',
+      }),
+    )
+
+    const impossible = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        paidAmount: '700',
+        paidDate: '2026-10-03',
+        status: 'paid',
+      },
+      url: `/api/installment-plans/${created.id}/occurrences/2`,
+    })
+    expect(impossible.statusCode).toBe(404)
+
+    const zeroValueInstallments = await createInstallmentPlanResponse({
+      categoryId: category.id,
+      description: 'ยอดต่องวดไม่ถูกต้อง',
+      firstPaymentDate: '2026-09-03',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '0',
+      paymentMethod: 'cash',
+      totalInstallments: 2,
+    })
+    expect(zeroValueInstallments.statusCode).toBe(400)
+  })
+
+  it('settles a plan early and can safely reopen it', async () => {
+    const category = await createCategory('expense', 'ผ่อนรถสมมติ')
+    const created = await createInstallmentPlan({
+      categoryId: category.id,
+      description: 'รถตัวอย่าง',
+      firstPaymentDate: '2026-01-05',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '5000',
+      paymentMethod: 'bank_transfer',
+      totalInstallments: 3,
+    })
+
+    await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        paidAmount: '5000',
+        paidDate: '2026-01-05',
+        status: 'paid',
+      },
+      url: `/api/installment-plans/${created.id}/occurrences/1`,
+    })
+    const settledResponse = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        closesPlan: true,
+        paidAmount: '145000',
+        paidDate: '2026-02-05',
+        status: 'paid',
+      },
+      url: `/api/installment-plans/${created.id}/occurrences/2`,
+    })
+    expect(settledResponse.statusCode).toBe(200)
+    const settled = settledResponse.json<{
+      occurrences: {
+        closesPlan: boolean
+        paidAmountMinor: string | null
+        status: string
+      }[]
+      status: string
+    }>()
+    expect(settled.status).toBe('settled')
+    expect(settled.occurrences).toEqual([
+      expect.objectContaining({ closesPlan: false, status: 'paid' }),
+      expect.objectContaining({
+        closesPlan: true,
+        paidAmountMinor: '14500000',
+        status: 'paid',
+      }),
+      expect.objectContaining({ closesPlan: false, status: 'cancelled' }),
+    ])
+
+    const reopenedResponse = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: { status: 'unpaid' },
+      url: `/api/installment-plans/${created.id}/occurrences/2`,
+    })
+    expect(reopenedResponse.statusCode).toBe(200)
+    const reopened = reopenedResponse.json<{
+      occurrences: { closesPlan: boolean; status: string }[]
+      status: string
+    }>()
+    expect(reopened.status).toBe('active')
+    expect(reopened.occurrences).toEqual([
+      expect.objectContaining({ closesPlan: false, status: 'paid' }),
+      expect.objectContaining({ closesPlan: false, status: 'unpaid' }),
+      expect.objectContaining({ closesPlan: false, status: 'unpaid' }),
+    ])
+  })
+
+  it('cancels unpaid installments while preserving paid history', async () => {
+    const category = await createCategory('expense', 'เงินกู้สมมติ')
+    const created = await createInstallmentPlan({
+      categoryId: category.id,
+      description: 'ชำระเงินกู้ตัวอย่าง',
+      firstPaymentDate: '2025-10-05',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '1250.75',
+      paymentMethod: 'bank_transfer',
+      totalInstallments: 60,
+    })
+    expect(created.endDate).toBe('2030-09-05')
+    expect(created.totalAmountMinor).toBeNull()
+    expect(created.occurrences[0]!.amountMinor).toBe('125075')
+
+    await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        paidAmount: '1250.75',
+        paidDate: '2025-10-05',
+        status: 'paid',
+      },
+      url: `/api/installment-plans/${created.id}/occurrences/1`,
+    })
+    const cancelled = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      url: `/api/installment-plans/${created.id}/cancel`,
+    })
+    expect(cancelled.statusCode).toBe(200)
+    const plan = cancelled.json<{
+      occurrences: {
+        paidAmountMinor: string | null
+        paidDate: string | null
+        status: string
+      }[]
+      status: string
+    }>()
+    expect(plan.status).toBe('cancelled')
+    expect(plan.occurrences[0]).toEqual(
+      expect.objectContaining({
+        paidAmountMinor: '125075',
+        paidDate: '2025-10-05',
+        status: 'paid',
+      }),
+    )
+    expect(
+      plan.occurrences.slice(1).every(({ status }) => status === 'cancelled'),
+    ).toBe(true)
+  })
+
   it('validates card configuration and duplicate names', async () => {
     await createCreditCard({
       cutoffDay: 31,
@@ -482,6 +717,31 @@ describeWithDatabase('finance API with MariaDB', () => {
     })
     expect(response.statusCode).toBe(201)
     return response.json<{ id: string }>()
+  }
+
+  async function createInstallmentPlan(input: Record<string, string | number>) {
+    const response = await createInstallmentPlanResponse(input)
+    expect(response.statusCode).toBe(201)
+    return response.json<{
+      endDate: string
+      id: string
+      occurrences: {
+        amountMinor: string | null
+        paidAmountMinor: string | null
+      }[]
+      totalAmountMinor: string | null
+    }>()
+  }
+
+  function createInstallmentPlanResponse(
+    input: Record<string, string | number>,
+  ) {
+    return app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'POST',
+      payload: input,
+      url: '/api/installment-plans',
+    })
   }
 
   async function getStatements(cardId: string) {

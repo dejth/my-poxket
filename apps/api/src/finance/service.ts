@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import {
   addCalendarMonthsClamped,
   calculateCardDueDate,
+  calculateInstallmentEndDate,
   calculatePlannedCardPaymentDate,
   calculateStatementEndDate,
 } from '@my-poxket/domain/calendar'
@@ -15,7 +16,13 @@ import {
 import { and, asc, desc, eq, gte, like, lte, type SQL } from 'drizzle-orm'
 
 import type { Database } from '../database/client.js'
-import { categories, creditCards, transactions } from '../database/schema.js'
+import {
+  categories,
+  creditCards,
+  installmentOccurrences,
+  installmentPlans,
+  transactions,
+} from '../database/schema.js'
 import { FinanceError, isDuplicateEntry } from './errors.js'
 
 export type Direction = 'income' | 'expense'
@@ -45,6 +52,18 @@ export interface TransactionFilters {
   readonly paymentMethod?: PaymentMethod | undefined
   readonly search?: string | undefined
   readonly status?: TransactionLifecycle | 'all' | undefined
+}
+
+export interface InstallmentPlanInput {
+  readonly categoryId: string
+  readonly creditCardId?: string | null | undefined
+  readonly description: string
+  readonly firstPaymentDate: string
+  readonly idempotencyKey: string
+  readonly installmentAmount: string
+  readonly paymentMethod: PaymentMethod
+  readonly totalAmount?: string | undefined
+  readonly totalInstallments: number
 }
 
 type QueryDatabase = Pick<Database, 'select'>
@@ -342,6 +361,294 @@ export async function listCreditCardStatements(
     )
 }
 
+export async function listInstallmentPlans(database: Database) {
+  const plans = await database
+    .select({
+      categoryId: categories.id,
+      categoryName: categories.name,
+      createdAt: installmentPlans.createdAt,
+      creditCardId: creditCards.id,
+      creditCardMaskedSuffix: creditCards.maskedSuffix,
+      creditCardName: creditCards.name,
+      description: installmentPlans.description,
+      firstPaymentDate: installmentPlans.firstPaymentDate,
+      id: installmentPlans.id,
+      paymentMethod: installmentPlans.paymentMethod,
+      status: installmentPlans.status,
+      totalAmountMinor: installmentPlans.totalAmountMinor,
+      totalInstallments: installmentPlans.totalInstallments,
+      updatedAt: installmentPlans.updatedAt,
+    })
+    .from(installmentPlans)
+    .innerJoin(categories, eq(categories.id, installmentPlans.categoryId))
+    .leftJoin(creditCards, eq(creditCards.id, installmentPlans.creditCardId))
+    .orderBy(desc(installmentPlans.createdAt))
+
+  const occurrences = await database
+    .select({
+      amountMinor: installmentOccurrences.amountMinor,
+      closesPlan: installmentOccurrences.closesPlan,
+      dueDate: installmentOccurrences.dueDate,
+      id: installmentOccurrences.id,
+      installmentNumber: installmentOccurrences.installmentNumber,
+      installmentPlanId: installmentOccurrences.installmentPlanId,
+      paidAmountMinor: installmentOccurrences.paidAmountMinor,
+      paidDate: installmentOccurrences.paidDate,
+      status: installmentOccurrences.status,
+    })
+    .from(installmentOccurrences)
+    .orderBy(
+      asc(installmentOccurrences.installmentPlanId),
+      asc(installmentOccurrences.installmentNumber),
+    )
+
+  return plans.map((plan) => serializeInstallmentPlan(plan, occurrences))
+}
+
+export async function createInstallmentPlan(
+  database: Database,
+  userId: string,
+  input: InstallmentPlanInput,
+) {
+  const totalAmountMinor = input.totalAmount
+    ? parseAmount(input.totalAmount)
+    : null
+  const installmentAmountMinor = parseAmount(input.installmentAmount)
+  const amounts = Array<bigint>(input.totalInstallments).fill(
+    installmentAmountMinor,
+  )
+
+  const planId = randomUUID()
+  try {
+    await database.transaction(async (transaction) => {
+      const { categoryId, creditCardId } = await validateInstallmentReferences(
+        transaction,
+        input,
+      )
+      await transaction.insert(installmentPlans).values({
+        categoryId,
+        createdByUserId: userId,
+        creditCardId,
+        currency: 'THB',
+        description: normalizeDescription(input.description),
+        firstPaymentDate: input.firstPaymentDate,
+        id: planId,
+        idempotencyKey: input.idempotencyKey,
+        paymentMethod: input.paymentMethod,
+        status: 'active',
+        totalAmountMinor,
+        totalInstallments: input.totalInstallments,
+      })
+      await transaction.insert(installmentOccurrences).values(
+        amounts.map((amountMinor, index) => ({
+          amountMinor,
+          dueDate: addCalendarMonthsClamped(input.firstPaymentDate, index),
+          id: randomUUID(),
+          installmentNumber: index + 1,
+          installmentPlanId: planId,
+          status: 'unpaid' as const,
+        })),
+      )
+    })
+  } catch (error) {
+    if (!isDuplicateEntry(error)) throw error
+    const [existing] = await database
+      .select({ id: installmentPlans.id })
+      .from(installmentPlans)
+      .where(eq(installmentPlans.idempotencyKey, input.idempotencyKey))
+      .limit(1)
+    if (!existing) throw error
+    return getInstallmentPlan(database, existing.id)
+  }
+
+  return getInstallmentPlan(database, planId)
+}
+
+export async function setInstallmentOccurrenceStatus(
+  database: Database,
+  planId: string,
+  installmentNumber: number,
+  input:
+    | {
+        readonly closesPlan: boolean
+        readonly paidAmount: string
+        readonly paidDate: string
+        readonly status: 'paid'
+      }
+    | { readonly status: 'unpaid' },
+) {
+  await database.transaction(async (transaction) => {
+    const [plan] = await transaction
+      .select({ id: installmentPlans.id, status: installmentPlans.status })
+      .from(installmentPlans)
+      .where(eq(installmentPlans.id, planId))
+      .limit(1)
+      .for('update')
+    if (!plan) {
+      throw new FinanceError('INSTALLMENT_PLAN_NOT_FOUND', 'ไม่พบแผนผ่อน', 404)
+    }
+    if (plan.status === 'cancelled') {
+      throw new FinanceError(
+        'INSTALLMENT_PLAN_CANCELLED',
+        'แผนผ่อนนี้ถูกยกเลิกแล้ว',
+        409,
+      )
+    }
+
+    const [occurrence] = await transaction
+      .select({
+        closesPlan: installmentOccurrences.closesPlan,
+        id: installmentOccurrences.id,
+        status: installmentOccurrences.status,
+      })
+      .from(installmentOccurrences)
+      .where(
+        and(
+          eq(installmentOccurrences.installmentPlanId, planId),
+          eq(installmentOccurrences.installmentNumber, installmentNumber),
+        ),
+      )
+      .limit(1)
+      .for('update')
+    if (!occurrence) {
+      throw new FinanceError('INSTALLMENT_NOT_FOUND', 'ไม่พบงวดที่ระบุ', 404)
+    }
+    if (input.status === 'paid' && plan.status !== 'active') {
+      throw new FinanceError(
+        'INSTALLMENT_PLAN_NOT_ACTIVE',
+        'บันทึกการจ่ายได้เฉพาะแผนที่กำลังผ่อน',
+        409,
+      )
+    }
+    if (input.status === 'paid' && occurrence.status !== 'unpaid') {
+      throw new FinanceError(
+        'INSTALLMENT_NOT_UNPAID',
+        'บันทึกการจ่ายได้เฉพาะงวดที่ยังไม่จ่าย',
+        409,
+      )
+    }
+    if (input.status === 'unpaid' && occurrence.status !== 'paid') {
+      throw new FinanceError(
+        'INSTALLMENT_NOT_PAID',
+        'เปลี่ยนกลับได้เฉพาะงวดที่จ่ายแล้ว',
+        409,
+      )
+    }
+    if (
+      input.status === 'unpaid' &&
+      plan.status === 'settled' &&
+      !occurrence.closesPlan
+    ) {
+      throw new FinanceError(
+        'INSTALLMENT_PLAN_SETTLED',
+        'แผนนี้ปิดยอดแล้ว กรุณายกเลิกการปิดยอดจากงวดที่ใช้ปิดบัญชี',
+        409,
+      )
+    }
+
+    if (input.status === 'paid' && input.closesPlan) {
+      await transaction
+        .update(installmentOccurrences)
+        .set({ status: 'cancelled' })
+        .where(
+          and(
+            eq(installmentOccurrences.installmentPlanId, planId),
+            eq(installmentOccurrences.status, 'unpaid'),
+          ),
+        )
+    }
+    if (input.status === 'unpaid' && occurrence.closesPlan) {
+      await transaction
+        .update(installmentOccurrences)
+        .set({ status: 'unpaid' })
+        .where(
+          and(
+            eq(installmentOccurrences.installmentPlanId, planId),
+            eq(installmentOccurrences.status, 'cancelled'),
+          ),
+        )
+    }
+
+    await transaction
+      .update(installmentOccurrences)
+      .set({
+        closesPlan: input.status === 'paid' && input.closesPlan,
+        paidAmountMinor:
+          input.status === 'paid' ? parseAmount(input.paidAmount) : null,
+        paidDate: input.status === 'paid' ? input.paidDate : null,
+        status: input.status,
+      })
+      .where(eq(installmentOccurrences.id, occurrence.id))
+
+    const statuses = await transaction
+      .select({ status: installmentOccurrences.status })
+      .from(installmentOccurrences)
+      .where(eq(installmentOccurrences.installmentPlanId, planId))
+    await transaction
+      .update(installmentPlans)
+      .set({
+        status:
+          input.status === 'paid' && input.closesPlan
+            ? 'settled'
+            : statuses.every(({ status }) => status === 'paid')
+              ? 'completed'
+              : 'active',
+      })
+      .where(eq(installmentPlans.id, planId))
+  })
+
+  return getInstallmentPlan(database, planId)
+}
+
+export async function cancelInstallmentPlan(
+  database: Database,
+  planId: string,
+) {
+  await database.transaction(async (transaction) => {
+    const [plan] = await transaction
+      .select({ id: installmentPlans.id, status: installmentPlans.status })
+      .from(installmentPlans)
+      .where(eq(installmentPlans.id, planId))
+      .limit(1)
+      .for('update')
+    if (!plan) {
+      throw new FinanceError('INSTALLMENT_PLAN_NOT_FOUND', 'ไม่พบแผนผ่อน', 404)
+    }
+    if (plan.status !== 'active') {
+      throw new FinanceError(
+        'INSTALLMENT_PLAN_NOT_ACTIVE',
+        'ยกเลิกได้เฉพาะแผนผ่อนที่ยังใช้งานอยู่',
+        409,
+      )
+    }
+
+    await transaction
+      .update(installmentOccurrences)
+      .set({ status: 'cancelled' })
+      .where(
+        and(
+          eq(installmentOccurrences.installmentPlanId, planId),
+          eq(installmentOccurrences.status, 'unpaid'),
+        ),
+      )
+    await transaction
+      .update(installmentPlans)
+      .set({ status: 'cancelled' })
+      .where(eq(installmentPlans.id, planId))
+  })
+
+  return getInstallmentPlan(database, planId)
+}
+
+async function getInstallmentPlan(database: Database, planId: string) {
+  const plans = await listInstallmentPlans(database)
+  const plan = plans.find(({ id }) => id === planId)
+  if (!plan) {
+    throw new FinanceError('INSTALLMENT_PLAN_NOT_FOUND', 'ไม่พบแผนผ่อน', 404)
+  }
+  return plan
+}
+
 export async function listTransactions(
   database: Database,
   filters: TransactionFilters,
@@ -574,6 +881,64 @@ async function prepareTransactionValues(
   }
 }
 
+async function validateInstallmentReferences(
+  database: QueryDatabase,
+  input: InstallmentPlanInput,
+) {
+  const [category] = await database
+    .select({
+      direction: categories.direction,
+      id: categories.id,
+      isActive: categories.isActive,
+    })
+    .from(categories)
+    .where(eq(categories.id, input.categoryId))
+    .limit(1)
+  if (!category) {
+    throw new FinanceError('CATEGORY_NOT_FOUND', 'ไม่พบหมวดหมู่', 404)
+  }
+  if (!category.isActive) {
+    throw new FinanceError(
+      'CATEGORY_INACTIVE',
+      'หมวดหมู่นี้ถูกปิดใช้งานแล้ว',
+      409,
+    )
+  }
+  if (category.direction !== 'expense') {
+    throw new FinanceError(
+      'INVALID_INSTALLMENT_CATEGORY',
+      'แผนผ่อนต้องใช้หมวดรายจ่าย',
+    )
+  }
+
+  const creditCardId = input.creditCardId ?? null
+  if ((input.paymentMethod === 'credit_card') !== Boolean(creditCardId)) {
+    throw new FinanceError(
+      'INVALID_CREDIT_CARD_REFERENCE',
+      'แผนผ่อนบัตรเครดิตต้องเลือกบัตร และวิธีชำระอื่นต้องไม่ผูกบัตร',
+    )
+  }
+  if (creditCardId) {
+    const [card] = await database
+      .select({ id: creditCards.id, isActive: creditCards.isActive })
+      .from(creditCards)
+      .where(eq(creditCards.id, creditCardId))
+      .limit(1)
+    if (!card) {
+      throw new FinanceError('CREDIT_CARD_NOT_FOUND', 'ไม่พบบัตรเครดิต', 404)
+    }
+    if (!card.isActive) {
+      throw new FinanceError(
+        'CREDIT_CARD_INACTIVE',
+        'บัตรเครดิตนี้ถูกปิดใช้งานแล้ว',
+        409,
+      )
+    }
+  }
+
+  return { categoryId: category.id, creditCardId }
+}
+
 function normalizeCardName(value: string): string {
   const normalized = value.trim().replaceAll(/\s+/g, ' ')
   if (normalized.length < 1 || normalized.length > 100) {
@@ -643,5 +1008,56 @@ function serializeTransaction(row: TransactionRow) {
   return {
     ...row,
     amountMinor: row.amountMinor.toString(),
+  }
+}
+
+function serializeInstallmentPlan(
+  plan: {
+    readonly categoryId: string
+    readonly categoryName: string
+    readonly createdAt: Date
+    readonly creditCardId: string | null
+    readonly creditCardMaskedSuffix: string | null
+    readonly creditCardName: string | null
+    readonly description: string
+    readonly firstPaymentDate: string
+    readonly id: string
+    readonly paymentMethod: PaymentMethod
+    readonly status: 'active' | 'completed' | 'settled' | 'cancelled'
+    readonly totalAmountMinor: bigint | null
+    readonly totalInstallments: number
+    readonly updatedAt: Date
+  },
+  occurrences: readonly {
+    readonly amountMinor: bigint
+    readonly closesPlan: boolean
+    readonly dueDate: string
+    readonly id: string
+    readonly installmentNumber: number
+    readonly installmentPlanId: string
+    readonly paidAmountMinor: bigint | null
+    readonly paidDate: string | null
+    readonly status: 'unpaid' | 'paid' | 'cancelled'
+  }[],
+) {
+  return {
+    ...plan,
+    endDate: calculateInstallmentEndDate(
+      plan.firstPaymentDate,
+      plan.totalInstallments,
+    ),
+    occurrences: occurrences
+      .filter(({ installmentPlanId }) => installmentPlanId === plan.id)
+      .map((occurrence) => ({
+        amountMinor: occurrence.amountMinor.toString(),
+        closesPlan: occurrence.closesPlan,
+        dueDate: occurrence.dueDate,
+        id: occurrence.id,
+        installmentNumber: occurrence.installmentNumber,
+        paidAmountMinor: occurrence.paidAmountMinor?.toString() ?? null,
+        paidDate: occurrence.paidDate,
+        status: occurrence.status,
+      })),
+    totalAmountMinor: plan.totalAmountMinor?.toString() ?? null,
   }
 }

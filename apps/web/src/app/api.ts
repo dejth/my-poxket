@@ -44,6 +44,52 @@ export interface CreditCardStatementData {
   readonly statementEndDate: string
 }
 
+export type InstallmentPlanStatus =
+  'active' | 'completed' | 'settled' | 'cancelled'
+export type InstallmentOccurrenceStatus = 'unpaid' | 'paid' | 'cancelled'
+
+export interface InstallmentOccurrenceData {
+  readonly amountMinor: string
+  readonly closesPlan: boolean
+  readonly dueDate: string
+  readonly id: string
+  readonly installmentNumber: number
+  readonly paidAmountMinor: string | null
+  readonly paidDate: string | null
+  readonly status: InstallmentOccurrenceStatus
+}
+
+export interface InstallmentPlanData {
+  readonly categoryId: string
+  readonly categoryName: string
+  readonly createdAt: string
+  readonly creditCardId: string | null
+  readonly creditCardMaskedSuffix: string | null
+  readonly creditCardName: string | null
+  readonly description: string
+  readonly endDate: string
+  readonly firstPaymentDate: string
+  readonly id: string
+  readonly occurrences: readonly InstallmentOccurrenceData[]
+  readonly paymentMethod: PaymentMethod
+  readonly status: InstallmentPlanStatus
+  readonly totalAmountMinor: string | null
+  readonly totalInstallments: number
+  readonly updatedAt: string
+}
+
+export interface InstallmentPlanInput {
+  readonly categoryId: string
+  readonly creditCardId?: string | null | undefined
+  readonly description: string
+  readonly firstPaymentDate: string
+  readonly idempotencyKey: string
+  readonly installmentAmount: string
+  readonly paymentMethod: PaymentMethod
+  readonly totalAmount?: string | undefined
+  readonly totalInstallments: number
+}
+
 export interface TransactionData {
   readonly amountMinor: string
   readonly categoryDirection: Direction
@@ -213,6 +259,58 @@ export async function getTransactions(
     credentials: 'include',
   })
   return readJsonResponse(response)
+}
+
+export async function getInstallmentPlans(): Promise<
+  readonly InstallmentPlanData[]
+> {
+  const response = await fetch('/api/installment-plans', {
+    credentials: 'include',
+  })
+  const body = await readJsonResponse<{ items: InstallmentPlanData[] }>(
+    response,
+  )
+  return body.items
+}
+
+export function createInstallmentPlan(
+  csrfToken: string,
+  input: InstallmentPlanInput,
+): Promise<InstallmentPlanData> {
+  return mutateJson('/api/installment-plans', csrfToken, input, 'POST')
+}
+
+export function setInstallmentStatus(
+  csrfToken: string,
+  planId: string,
+  installmentNumber: number,
+  input:
+    | {
+        readonly paidAmount: string
+        readonly paidDate: string
+        readonly closesPlan: boolean
+        readonly status: 'paid'
+      }
+    | { readonly status: 'unpaid' },
+): Promise<InstallmentPlanData> {
+  return mutateJson(
+    `/api/installment-plans/${planId}/occurrences/${installmentNumber}`,
+    csrfToken,
+    input,
+    'PATCH',
+  )
+}
+
+export function cancelInstallmentPlan(
+  csrfToken: string,
+  planId: string,
+): Promise<InstallmentPlanData> {
+  return mutateJson(
+    `/api/installment-plans/${planId}/cancel`,
+    csrfToken,
+    undefined,
+    'POST',
+  )
 }
 
 export function createTransaction(
