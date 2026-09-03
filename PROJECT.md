@@ -71,6 +71,8 @@ confirmation before implementation.
 - Corrections preserve the immutable original as `superseded` and create one
   linked replacement atomically. Cancellation changes status without deleting
   financial history.
+- Credit-card expenses require an active configured card. Correcting the date
+  or card creates an auditable replacement and recalculates its statement.
 
 For an installment beginning `2025-10-05` with 60 installments, occurrence
 `1/60` is due `2025-10-05`, every later occurrence uses day 5, and `60/60` is
@@ -96,8 +98,13 @@ later transaction belongs to the next statement.
 The owner normally plans to pay card statements at the end of the month before
 the official due month, such as September 30 for an October 1 or October 5 due
 date. This must be represented separately from the provider's official due
-date. The exact fallback for unusual card rules where that planned date would
-precede the statement end remains to be confirmed before the card phase.
+date. If that planned date would precede the statement end, the official due
+date is used instead.
+
+Statements are derived from active linked purchases rather than persisted as
+snapshots. Card date rules are immutable in this phase: deactivate the old
+configuration and create a uniquely named replacement when rules change.
+Paid/unpaid statement workflow remains part of Issue #6.
 
 ## Repository structure
 

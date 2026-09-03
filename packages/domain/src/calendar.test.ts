@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   addCalendarMonthsClamped,
+  calculateCardDueDate,
   calculateInstallmentEndDate,
+  calculatePlannedCardPaymentDate,
+  calculateStatementEndDate,
   daysInMonth,
 } from './calendar.js'
 
@@ -23,5 +26,32 @@ describe('calendar rules', () => {
 
   it('keeps a one-installment plan on its first payment date', () => {
     expect(calculateInstallmentEndDate('2025-10-05', 1)).toBe('2025-10-05')
+  })
+
+  it('assigns purchases before, on, and after the card cut-off', () => {
+    expect(calculateStatementEndDate('2026-09-16', 17)).toBe('2026-09-17')
+    expect(calculateStatementEndDate('2026-09-17', 17)).toBe('2026-09-17')
+    expect(calculateStatementEndDate('2026-09-18', 17)).toBe('2026-10-17')
+  })
+
+  it('clamps card rules across short months, leap years, and year boundaries', () => {
+    expect(calculateStatementEndDate('2027-02-28', 31)).toBe('2027-02-28')
+    expect(calculateStatementEndDate('2028-02-29', 31)).toBe('2028-02-29')
+    expect(calculateStatementEndDate('2026-12-31', 17)).toBe('2027-01-17')
+    expect(calculateCardDueDate('2026-01-31', 31)).toBe('2026-02-28')
+  })
+
+  it('derives official and planned payment dates without preceding the statement', () => {
+    const dueDate = calculateCardDueDate('2026-09-17', 1)
+    expect(dueDate).toBe('2026-10-01')
+    expect(calculatePlannedCardPaymentDate('2026-09-17', dueDate)).toBe(
+      '2026-09-30',
+    )
+
+    const sameMonthDueDate = calculateCardDueDate('2026-09-05', 25)
+    expect(sameMonthDueDate).toBe('2026-09-25')
+    expect(
+      calculatePlannedCardPaymentDate('2026-09-05', sameMonthDueDate),
+    ).toBe('2026-09-25')
   })
 })

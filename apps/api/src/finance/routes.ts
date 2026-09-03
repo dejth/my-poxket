@@ -13,11 +13,15 @@ import {
   cancelTransaction,
   correctTransaction,
   createCategory,
+  createCreditCard,
   createTransaction,
   getTransaction,
   listCategories,
+  listCreditCards,
+  listCreditCardStatements,
   listTransactions,
   setCategoryActive,
+  setCreditCardActive,
 } from './service.js'
 
 const directionSchema = z.enum(['income', 'expense'])
@@ -26,6 +30,7 @@ const paymentMethodSchema = z.enum([
   'bank_transfer',
   'debit_card',
   'other',
+  'credit_card',
 ])
 const identifierSchema = z.uuid()
 const localDateSchema = z
@@ -38,9 +43,19 @@ const categoryInputSchema = z.object({
   name: z.string().min(1).max(100),
 })
 const categoryStatusSchema = z.object({ isActive: z.boolean() })
+const creditCardInputSchema = z.object({
+  cutoffDay: z.number().int().min(1).max(31),
+  dueDay: z.number().int().min(1).max(31),
+  maskedSuffix: z
+    .string()
+    .regex(/^\d{4}$/)
+    .optional(),
+  name: z.string().min(1).max(100),
+})
 const transactionInputSchema = z.object({
   amount: z.string().min(1).max(32),
   categoryId: identifierSchema,
+  creditCardId: identifierSchema.nullish(),
   description: z.string().min(1).max(255),
   direction: directionSchema,
   paymentMethod: paymentMethodSchema,
@@ -49,6 +64,7 @@ const transactionInputSchema = z.object({
 const transactionQuerySchema = z
   .object({
     categoryId: identifierSchema.optional(),
+    creditCardId: identifierSchema.optional(),
     dateFrom: localDateSchema.optional(),
     dateTo: localDateSchema.optional(),
     direction: directionSchema.optional(),
@@ -64,6 +80,15 @@ const transactionQuerySchema = z
     ({ dateFrom, dateTo }) => !dateFrom || !dateTo || dateFrom <= dateTo,
     { message: 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด' },
   )
+const statementQuerySchema = z
+  .object({
+    cardId: identifierSchema.optional(),
+    dateFrom: localDateSchema,
+    dateTo: localDateSchema,
+  })
+  .refine(({ dateFrom, dateTo }) => dateFrom <= dateTo, {
+    message: 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด',
+  })
 
 interface FinanceRoutesOptions {
   readonly config: ApiConfig
@@ -116,6 +141,73 @@ export function registerFinanceRoutes(
       return reply.send(
         await setCategoryActive(database, params.data.id, input.data.isActive),
       )
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.get('/api/credit-cards', async (request, reply) => {
+    const session = await authenticate(request, reply, cookieName, database)
+    if (!session) return
+    return reply.send({ items: await listCreditCards(database) })
+  })
+
+  app.post('/api/credit-cards', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    const input = creditCardInputSchema.safeParse(request.body)
+    if (!input.success) return sendInvalidInput(reply)
+
+    try {
+      return reply
+        .status(201)
+        .send(await createCreditCard(database, input.data))
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.patch('/api/credit-cards/:id/status', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    const params = z.object({ id: identifierSchema }).safeParse(request.params)
+    const input = categoryStatusSchema.safeParse(request.body)
+    if (!params.success || !input.success) return sendInvalidInput(reply)
+
+    try {
+      return reply.send(
+        await setCreditCardActive(
+          database,
+          params.data.id,
+          input.data.isActive,
+        ),
+      )
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.get('/api/credit-card-statements', async (request, reply) => {
+    const session = await authenticate(request, reply, cookieName, database)
+    if (!session) return
+    const query = statementQuerySchema.safeParse(request.query)
+    if (!query.success)
+      return sendInvalidInput(reply, query.error.issues[0]?.message)
+
+    try {
+      return reply.send({
+        items: await listCreditCardStatements(database, query.data),
+      })
     } catch (error) {
       return sendFinanceError(reply, error)
     }

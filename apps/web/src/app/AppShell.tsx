@@ -11,6 +11,7 @@ interface AppShellProps {
 const navigation = [
   { label: 'ภาพรวม', path: '/' },
   { label: 'รายการ', path: '/transactions' },
+  { label: 'บัตร', path: '/credit-cards' },
   { label: 'หมวดหมู่', path: '/categories' },
 ] as const
 

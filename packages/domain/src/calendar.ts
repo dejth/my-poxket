@@ -75,6 +75,58 @@ export function calculateInstallmentEndDate(
   return addCalendarMonthsClamped(firstPaymentDate, totalInstallments - 1)
 }
 
+export function calculateStatementEndDate(
+  transactionDate: string,
+  cutoffDay: number,
+): LocalDate {
+  validateCardDay(cutoffDay)
+  const { year, month, day } = parseLocalDate(transactionDate)
+  const statementMonth =
+    day <= Math.min(cutoffDay, daysInMonth(year, month)) ? month : month + 1
+  return dateForMonthDay(year, statementMonth, cutoffDay)
+}
+
+export function calculateCardDueDate(
+  statementEndDate: string,
+  dueDay: number,
+): LocalDate {
+  validateCardDay(dueDay)
+  const { year, month } = parseLocalDate(statementEndDate)
+  const sameMonth = dateForMonthDay(year, month, dueDay)
+  return sameMonth > statementEndDate
+    ? sameMonth
+    : dateForMonthDay(year, month + 1, dueDay)
+}
+
+export function calculatePlannedCardPaymentDate(
+  statementEndDate: string,
+  officialDueDate: string,
+): LocalDate {
+  parseLocalDate(statementEndDate)
+  const { year, month } = parseLocalDate(officialDueDate)
+  const priorMonthEnd = dateForMonthDay(year, month - 1, 31)
+  return priorMonthEnd >= statementEndDate
+    ? priorMonthEnd
+    : (officialDueDate as LocalDate)
+}
+
+function validateCardDay(day: number): void {
+  if (!Number.isSafeInteger(day) || day < 1 || day > 31) {
+    throw new RangeError('Card calendar day must be an integer from 1 to 31')
+  }
+}
+
+function dateForMonthDay(year: number, month: number, day: number): LocalDate {
+  const monthIndex = year * 12 + month - 1
+  const normalizedYear = Math.floor(monthIndex / 12)
+  const normalizedMonth = (((monthIndex % 12) + 12) % 12) + 1
+  return formatLocalDate({
+    day: Math.min(day, daysInMonth(normalizedYear, normalizedMonth)),
+    month: normalizedMonth,
+    year: normalizedYear,
+  })
+}
+
 function formatLocalDate({ year, month, day }: DateParts): LocalDate {
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` as LocalDate
 }
