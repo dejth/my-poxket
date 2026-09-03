@@ -90,6 +90,55 @@ export interface InstallmentPlanInput {
   readonly totalInstallments: number
 }
 
+export type RecurringRuleStatus = 'active' | 'stopped'
+export type RecurringOccurrenceStatus = 'unpaid' | 'paid' | 'cancelled'
+
+export interface RecurringOccurrenceData {
+  readonly amountMinor: string
+  readonly categoryId: string
+  readonly categoryName: string
+  readonly creditCardId: string | null
+  readonly creditCardMaskedSuffix: string | null
+  readonly creditCardName: string | null
+  readonly description: string
+  readonly dueDate: string
+  readonly id: string
+  readonly paidAmountMinor: string | null
+  readonly paidDate: string | null
+  readonly paymentMethod: PaymentMethod
+  readonly recurrencePeriod: string
+  readonly status: RecurringOccurrenceStatus
+}
+
+export interface RecurringExpenseData {
+  readonly amountMinor: string
+  readonly categoryId: string
+  readonly categoryName: string
+  readonly createdAt: string
+  readonly creditCardId: string | null
+  readonly creditCardMaskedSuffix: string | null
+  readonly creditCardName: string | null
+  readonly description: string
+  readonly id: string
+  readonly occurrences: readonly RecurringOccurrenceData[]
+  readonly paymentMethod: PaymentMethod
+  readonly recurrenceDay: number
+  readonly startDate: string
+  readonly status: RecurringRuleStatus
+  readonly updatedAt: string
+}
+
+export interface RecurringExpenseInput {
+  readonly amount: string
+  readonly categoryId: string
+  readonly creditCardId?: string | null | undefined
+  readonly description: string
+  readonly idempotencyKey?: string | undefined
+  readonly paymentMethod: PaymentMethod
+  readonly recurrenceDay: number
+  readonly startDate: string
+}
+
 export interface TransactionData {
   readonly amountMinor: string
   readonly categoryDirection: Direction
@@ -309,6 +358,77 @@ export function cancelInstallmentPlan(
     `/api/installment-plans/${planId}/cancel`,
     csrfToken,
     undefined,
+    'POST',
+  )
+}
+
+export async function getRecurringExpenses(
+  csrfToken: string,
+): Promise<readonly RecurringExpenseData[]> {
+  await mutateJson(
+    '/api/recurring-expenses/materialize',
+    csrfToken,
+    undefined,
+    'POST',
+  )
+  const response = await fetch('/api/recurring-expenses', {
+    credentials: 'include',
+  })
+  const body = await readJsonResponse<{ items: RecurringExpenseData[] }>(
+    response,
+  )
+  return body.items
+}
+
+export function createRecurringExpense(
+  csrfToken: string,
+  input: RecurringExpenseInput & { readonly idempotencyKey: string },
+): Promise<RecurringExpenseData> {
+  return mutateJson('/api/recurring-expenses', csrfToken, input, 'POST')
+}
+
+export function updateRecurringExpense(
+  csrfToken: string,
+  ruleId: string,
+  input: RecurringExpenseInput,
+): Promise<RecurringExpenseData> {
+  return mutateJson(
+    `/api/recurring-expenses/${ruleId}`,
+    csrfToken,
+    input,
+    'PATCH',
+  )
+}
+
+export function setRecurringExpenseStatus(
+  csrfToken: string,
+  ruleId: string,
+  period: string,
+  input:
+    | {
+        readonly paidAmount: string
+        readonly paidDate: string
+        readonly status: 'paid'
+      }
+    | { readonly status: 'unpaid' },
+): Promise<RecurringExpenseData> {
+  return mutateJson(
+    `/api/recurring-expenses/${ruleId}/occurrences/${period}`,
+    csrfToken,
+    input,
+    'PATCH',
+  )
+}
+
+export function stopRecurringExpense(
+  csrfToken: string,
+  ruleId: string,
+  futureOccurrences: 'cancel' | 'retain',
+): Promise<RecurringExpenseData> {
+  return mutateJson(
+    `/api/recurring-expenses/${ruleId}/stop`,
+    csrfToken,
+    { futureOccurrences },
     'POST',
   )
 }

@@ -97,9 +97,10 @@ Reverting the payoff reopens those remaining occurrences without changing prior
 paid history.
 
 A recurring rule beginning `2026-09-10` uses day 10 as its monthly occurrence
-day. Occurrences will be materialized idempotently from the rule; the exact
-future materialization horizon will be finalized with the upcoming-payables
-feature so a background scheduler is not introduced without need.
+day. Opening the recurring-expense view materializes missing occurrences
+idempotently through the end of the next calendar month. Issue #6 may request a
+later bounded horizon when its upcoming-payables window requires one; no
+background scheduler is used.
 
 ## Credit-card dates
 
@@ -152,11 +153,11 @@ No database dump is committed to Git.
 
 ## Delivery phases
 
-1. Issue #1 — Bootstrap and authentication foundation.
-2. Issue #2 — Transactions and categories (owner UAT passed).
-3. Issue #3 — Credit cards, statements, and planned payments.
-4. Issue #4 — Installments with `N/N` and paid-state tracking.
-5. Issue #5 — Recurring expenses and idempotent occurrences.
+1. Issue #1 — Bootstrap and authentication foundation (complete).
+2. Issue #2 — Transactions and categories (complete; owner UAT passed).
+3. Issue #3 — Credit cards, statements, and planned payments (complete).
+4. Issue #4 — Installments with `N/N` and paid-state tracking (complete).
+5. Issue #5 — Recurring expenses and idempotent occurrences (complete; owner UAT passed).
 6. Issue #6 — Monthly activity and upcoming payables without double counting.
 7. Issue #7 — Responsive polish, accessibility, and fictional portfolio screenshots.
 8. Issue #8 — Plesk artifact preparation and dry run.

@@ -16,16 +16,22 @@ import {
   createCategory,
   createCreditCard,
   createInstallmentPlan,
+  createRecurringExpenseRule,
   createTransaction,
   getTransaction,
   listCategories,
   listCreditCards,
   listCreditCardStatements,
   listInstallmentPlans,
+  listRecurringExpenseRules,
   listTransactions,
+  materializeRecurringExpenseRules,
   setCategoryActive,
   setCreditCardActive,
   setInstallmentOccurrenceStatus,
+  setRecurringOccurrenceStatus,
+  stopRecurringExpenseRule,
+  updateRecurringExpenseRule,
 } from './service.js'
 
 const directionSchema = z.enum(['income', 'expense'])
@@ -85,6 +91,30 @@ const installmentStatusSchema = z.discriminatedUnion('status', [
   }),
   z.object({ status: z.literal('unpaid') }),
 ])
+const recurringExpenseInputSchema = z.object({
+  amount: z.string().min(1).max(32),
+  categoryId: identifierSchema,
+  creditCardId: identifierSchema.nullish(),
+  description: z.string().min(1).max(255),
+  paymentMethod: paymentMethodSchema,
+  recurrenceDay: z.number().int().min(1).max(31),
+  startDate: localDateSchema,
+})
+const recurringExpenseCreateSchema = recurringExpenseInputSchema.extend({
+  idempotencyKey: identifierSchema,
+})
+const recurringOccurrenceStatusSchema = z.discriminatedUnion('status', [
+  z.object({
+    paidAmount: z.string().min(1).max(32),
+    paidDate: localDateSchema,
+    status: z.literal('paid'),
+  }),
+  z.object({ status: z.literal('unpaid') }),
+])
+const recurrencePeriodSchema = z.string().regex(/^\d{4}-\d{2}$/)
+const stopRecurringExpenseSchema = z.object({
+  futureOccurrences: z.enum(['cancel', 'retain']),
+})
 const transactionQuerySchema = z
   .object({
     categoryId: identifierSchema.optional(),
@@ -320,6 +350,122 @@ export function registerFinanceRoutes(
 
     try {
       return reply.send(await cancelInstallmentPlan(database, params.data.id))
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.get('/api/recurring-expenses', async (request, reply) => {
+    const session = await authenticate(request, reply, cookieName, database)
+    if (!session) return
+    return reply.send({ items: await listRecurringExpenseRules(database) })
+  })
+
+  app.post('/api/recurring-expenses/materialize', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    return reply.send(await materializeRecurringExpenseRules(database))
+  })
+
+  app.post('/api/recurring-expenses', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    const input = recurringExpenseCreateSchema.safeParse(request.body)
+    if (!input.success) return sendInvalidInput(reply)
+    try {
+      return reply
+        .status(201)
+        .send(
+          await createRecurringExpenseRule(
+            database,
+            session.userId,
+            input.data,
+          ),
+        )
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.patch('/api/recurring-expenses/:id', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    const params = z.object({ id: identifierSchema }).safeParse(request.params)
+    const input = recurringExpenseInputSchema.safeParse(request.body)
+    if (!params.success || !input.success) return sendInvalidInput(reply)
+    try {
+      return reply.send(
+        await updateRecurringExpenseRule(database, params.data.id, input.data),
+      )
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.patch(
+    '/api/recurring-expenses/:id/occurrences/:period',
+    async (request, reply) => {
+      const session = await authorizeMutation(
+        request,
+        reply,
+        cookieName,
+        database,
+      )
+      if (!session) return
+      const params = z
+        .object({ id: identifierSchema, period: recurrencePeriodSchema })
+        .safeParse(request.params)
+      const input = recurringOccurrenceStatusSchema.safeParse(request.body)
+      if (!params.success || !input.success) return sendInvalidInput(reply)
+      try {
+        return reply.send(
+          await setRecurringOccurrenceStatus(
+            database,
+            params.data.id,
+            params.data.period,
+            input.data,
+          ),
+        )
+      } catch (error) {
+        return sendFinanceError(reply, error)
+      }
+    },
+  )
+
+  app.post('/api/recurring-expenses/:id/stop', async (request, reply) => {
+    const session = await authorizeMutation(
+      request,
+      reply,
+      cookieName,
+      database,
+    )
+    if (!session) return
+    const params = z.object({ id: identifierSchema }).safeParse(request.params)
+    const input = stopRecurringExpenseSchema.safeParse(request.body)
+    if (!params.success || !input.success) return sendInvalidInput(reply)
+    try {
+      return reply.send(
+        await stopRecurringExpenseRule(
+          database,
+          params.data.id,
+          input.data.futureOccurrences,
+        ),
+      )
     } catch (error) {
       return sendFinanceError(reply, error)
     }

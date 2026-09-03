@@ -6,6 +6,8 @@ import {
   calculateInstallmentEndDate,
   calculatePlannedCardPaymentDate,
   calculateStatementEndDate,
+  nextMonthPeriod,
+  recurringDateForPeriod,
 } from '@my-poxket/domain/calendar'
 import {
   nextTransactionStatus,
@@ -13,7 +15,7 @@ import {
   validateCategoryDirection,
   validatePaymentMethod,
 } from '@my-poxket/domain/transactions'
-import { and, asc, desc, eq, gte, like, lte, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, like, lte, sql, type SQL } from 'drizzle-orm'
 
 import type { Database } from '../database/client.js'
 import {
@@ -21,6 +23,8 @@ import {
   creditCards,
   installmentOccurrences,
   installmentPlans,
+  recurringExpenseOccurrences,
+  recurringExpenseRules,
   transactions,
 } from '../database/schema.js'
 import { FinanceError, isDuplicateEntry } from './errors.js'
@@ -64,6 +68,17 @@ export interface InstallmentPlanInput {
   readonly paymentMethod: PaymentMethod
   readonly totalAmount?: string | undefined
   readonly totalInstallments: number
+}
+
+export interface RecurringExpenseInput {
+  readonly amount: string
+  readonly categoryId: string
+  readonly creditCardId?: string | null | undefined
+  readonly description: string
+  readonly idempotencyKey?: string | undefined
+  readonly paymentMethod: PaymentMethod
+  readonly recurrenceDay: number
+  readonly startDate: string
 }
 
 type QueryDatabase = Pick<Database, 'select'>
@@ -649,6 +664,396 @@ async function getInstallmentPlan(database: Database, planId: string) {
   return plan
 }
 
+export async function listRecurringExpenseRules(database: Database) {
+  const [rules, occurrences, categoryRows, cardRows] = await Promise.all([
+    database
+      .select()
+      .from(recurringExpenseRules)
+      .orderBy(desc(recurringExpenseRules.createdAt)),
+    database
+      .select()
+      .from(recurringExpenseOccurrences)
+      .orderBy(
+        asc(recurringExpenseOccurrences.recurringExpenseRuleId),
+        desc(recurringExpenseOccurrences.dueDate),
+      ),
+    database
+      .select({ id: categories.id, name: categories.name })
+      .from(categories),
+    database
+      .select({
+        id: creditCards.id,
+        maskedSuffix: creditCards.maskedSuffix,
+        name: creditCards.name,
+      })
+      .from(creditCards),
+  ])
+  const categoryNames = new Map(categoryRows.map(({ id, name }) => [id, name]))
+  const cards = new Map(cardRows.map((card) => [card.id, card]))
+
+  // ponytail: in-memory grouping is enough for one owner; use keyed queries if history becomes large.
+  return rules.map((rule) => ({
+    amountMinor: rule.amountMinor.toString(),
+    categoryId: rule.categoryId,
+    categoryName: categoryNames.get(rule.categoryId) ?? 'หมวดหมู่เดิม',
+    createdAt: rule.createdAt,
+    creditCardId: rule.creditCardId,
+    creditCardMaskedSuffix: rule.creditCardId
+      ? (cards.get(rule.creditCardId)?.maskedSuffix ?? null)
+      : null,
+    creditCardName: rule.creditCardId
+      ? (cards.get(rule.creditCardId)?.name ?? null)
+      : null,
+    description: rule.description,
+    id: rule.id,
+    occurrences: occurrences
+      .filter(
+        ({ recurringExpenseRuleId }) => recurringExpenseRuleId === rule.id,
+      )
+      .map((occurrence) => ({
+        amountMinor: occurrence.amountMinor.toString(),
+        categoryId: occurrence.categoryId,
+        categoryName:
+          categoryNames.get(occurrence.categoryId) ?? 'หมวดหมู่เดิม',
+        creditCardId: occurrence.creditCardId,
+        creditCardMaskedSuffix: occurrence.creditCardId
+          ? (cards.get(occurrence.creditCardId)?.maskedSuffix ?? null)
+          : null,
+        creditCardName: occurrence.creditCardId
+          ? (cards.get(occurrence.creditCardId)?.name ?? null)
+          : null,
+        description: occurrence.description,
+        dueDate: occurrence.dueDate,
+        id: occurrence.id,
+        paidAmountMinor: occurrence.paidAmountMinor?.toString() ?? null,
+        paidDate: occurrence.paidDate,
+        paymentMethod: occurrence.paymentMethod,
+        recurrencePeriod: occurrence.recurrencePeriod,
+        status: occurrence.status,
+      })),
+    paymentMethod: rule.paymentMethod,
+    recurrenceDay: rule.recurrenceDay,
+    startDate: rule.startDate,
+    status: rule.status,
+    updatedAt: rule.updatedAt,
+  }))
+}
+
+export async function createRecurringExpenseRule(
+  database: Database,
+  userId: string,
+  input: RecurringExpenseInput & { readonly idempotencyKey: string },
+  today = todayInBangkok(),
+) {
+  const ruleId = randomUUID()
+  try {
+    await database.transaction(async (transaction) => {
+      const { categoryId, creditCardId } = await validateExpenseReferences(
+        transaction,
+        input,
+      )
+      await transaction.insert(recurringExpenseRules).values({
+        amountMinor: parseAmount(input.amount),
+        categoryId,
+        createdByUserId: userId,
+        creditCardId,
+        currency: 'THB',
+        description: normalizeDescription(input.description),
+        id: ruleId,
+        idempotencyKey: input.idempotencyKey,
+        paymentMethod: input.paymentMethod,
+        recurrenceDay: input.recurrenceDay,
+        startDate: input.startDate,
+        status: 'active',
+      })
+    })
+  } catch (error) {
+    if (!isDuplicateEntry(error)) throw error
+    const [existing] = await database
+      .select({ id: recurringExpenseRules.id })
+      .from(recurringExpenseRules)
+      .where(eq(recurringExpenseRules.idempotencyKey, input.idempotencyKey))
+      .limit(1)
+    if (!existing) throw error
+    await materializeRecurringExpenseRules(database, today)
+    return getRecurringExpenseRule(database, existing.id)
+  }
+
+  await materializeRecurringExpenseRules(database, today)
+  return getRecurringExpenseRule(database, ruleId)
+}
+
+export async function updateRecurringExpenseRule(
+  database: Database,
+  ruleId: string,
+  input: RecurringExpenseInput,
+  today = todayInBangkok(),
+) {
+  await database.transaction(async (transaction) => {
+    const [rule] = await transaction
+      .select({
+        id: recurringExpenseRules.id,
+        status: recurringExpenseRules.status,
+      })
+      .from(recurringExpenseRules)
+      .where(eq(recurringExpenseRules.id, ruleId))
+      .limit(1)
+      .for('update')
+    if (!rule) throw recurringRuleNotFound()
+    if (rule.status !== 'active') {
+      throw new FinanceError(
+        'RECURRING_RULE_STOPPED',
+        'แก้ไขได้เฉพาะรายการประจำที่ยังใช้งานอยู่',
+        409,
+      )
+    }
+
+    const { categoryId, creditCardId } = await validateExpenseReferences(
+      transaction,
+      input,
+    )
+    const values = {
+      amountMinor: parseAmount(input.amount),
+      categoryId,
+      creditCardId,
+      description: normalizeDescription(input.description),
+      paymentMethod: input.paymentMethod,
+      recurrenceDay: input.recurrenceDay,
+      startDate: input.startDate,
+    }
+    await transaction
+      .update(recurringExpenseRules)
+      .set(values)
+      .where(eq(recurringExpenseRules.id, ruleId))
+
+    const firstPeriod = firstRecurringPeriod(
+      input.startDate,
+      input.recurrenceDay,
+    )
+    await transaction
+      .update(recurringExpenseOccurrences)
+      .set({ status: 'cancelled' })
+      .where(
+        and(
+          eq(recurringExpenseOccurrences.recurringExpenseRuleId, ruleId),
+          eq(recurringExpenseOccurrences.status, 'unpaid'),
+          gte(recurringExpenseOccurrences.recurrencePeriod, today.slice(0, 7)),
+          lte(
+            recurringExpenseOccurrences.recurrencePeriod,
+            previousPeriod(firstPeriod),
+          ),
+        ),
+      )
+    await transaction
+      .update(recurringExpenseOccurrences)
+      .set({
+        amountMinor: values.amountMinor,
+        categoryId: values.categoryId,
+        creditCardId: values.creditCardId,
+        description: values.description,
+        dueDate: sql`LEAST(CONCAT(${recurringExpenseOccurrences.recurrencePeriod}, '-', LPAD(${input.recurrenceDay}, 2, '0')), LAST_DAY(CONCAT(${recurringExpenseOccurrences.recurrencePeriod}, '-01')))`,
+        paymentMethod: values.paymentMethod,
+      })
+      .where(
+        and(
+          eq(recurringExpenseOccurrences.recurringExpenseRuleId, ruleId),
+          eq(recurringExpenseOccurrences.status, 'unpaid'),
+          gte(recurringExpenseOccurrences.recurrencePeriod, firstPeriod),
+          gte(recurringExpenseOccurrences.recurrencePeriod, today.slice(0, 7)),
+        ),
+      )
+  })
+
+  await materializeRecurringExpenseRules(database, today)
+  return getRecurringExpenseRule(database, ruleId)
+}
+
+export async function setRecurringOccurrenceStatus(
+  database: Database,
+  ruleId: string,
+  period: string,
+  input:
+    | {
+        readonly paidAmount: string
+        readonly paidDate: string
+        readonly status: 'paid'
+      }
+    | { readonly status: 'unpaid' },
+) {
+  const [occurrence] = await database
+    .select({
+      id: recurringExpenseOccurrences.id,
+      status: recurringExpenseOccurrences.status,
+    })
+    .from(recurringExpenseOccurrences)
+    .where(
+      and(
+        eq(recurringExpenseOccurrences.recurringExpenseRuleId, ruleId),
+        eq(recurringExpenseOccurrences.recurrencePeriod, period),
+      ),
+    )
+    .limit(1)
+  if (!occurrence) {
+    throw new FinanceError(
+      'RECURRING_OCCURRENCE_NOT_FOUND',
+      'ไม่พบรอบรายการประจำ',
+      404,
+    )
+  }
+  if (input.status === 'paid' && occurrence.status !== 'unpaid') {
+    throw new FinanceError(
+      'RECURRING_OCCURRENCE_NOT_UNPAID',
+      'บันทึกการจ่ายได้เฉพาะรายการที่ยังไม่จ่าย',
+      409,
+    )
+  }
+  if (input.status === 'unpaid' && occurrence.status !== 'paid') {
+    throw new FinanceError(
+      'RECURRING_OCCURRENCE_NOT_PAID',
+      'ย้อนสถานะได้เฉพาะรายการที่จ่ายแล้ว',
+      409,
+    )
+  }
+
+  await database
+    .update(recurringExpenseOccurrences)
+    .set({
+      paidAmountMinor:
+        input.status === 'paid' ? parseAmount(input.paidAmount) : null,
+      paidDate: input.status === 'paid' ? input.paidDate : null,
+      status: input.status,
+    })
+    .where(eq(recurringExpenseOccurrences.id, occurrence.id))
+  return getRecurringExpenseRule(database, ruleId)
+}
+
+export async function stopRecurringExpenseRule(
+  database: Database,
+  ruleId: string,
+  futureOccurrences: 'cancel' | 'retain',
+  today = todayInBangkok(),
+) {
+  await database.transaction(async (transaction) => {
+    const [rule] = await transaction
+      .select({
+        id: recurringExpenseRules.id,
+        status: recurringExpenseRules.status,
+      })
+      .from(recurringExpenseRules)
+      .where(eq(recurringExpenseRules.id, ruleId))
+      .limit(1)
+      .for('update')
+    if (!rule) throw recurringRuleNotFound()
+    if (rule.status !== 'active') {
+      throw new FinanceError(
+        'RECURRING_RULE_STOPPED',
+        'รายการประจำนี้หยุดแล้ว',
+        409,
+      )
+    }
+    if (futureOccurrences === 'cancel') {
+      await transaction
+        .update(recurringExpenseOccurrences)
+        .set({ status: 'cancelled' })
+        .where(
+          and(
+            eq(recurringExpenseOccurrences.recurringExpenseRuleId, ruleId),
+            eq(recurringExpenseOccurrences.status, 'unpaid'),
+            gte(recurringExpenseOccurrences.dueDate, today),
+          ),
+        )
+    }
+    await transaction
+      .update(recurringExpenseRules)
+      .set({ status: 'stopped' })
+      .where(eq(recurringExpenseRules.id, ruleId))
+  })
+  return getRecurringExpenseRule(database, ruleId)
+}
+
+export async function materializeRecurringExpenseRules(
+  database: Database,
+  today = todayInBangkok(),
+) {
+  const rules = await database
+    .select()
+    .from(recurringExpenseRules)
+    .where(eq(recurringExpenseRules.status, 'active'))
+  const throughPeriod = nextMonthPeriod(today)
+
+  for (const rule of rules) {
+    // ponytail: replaying bounded months keeps materialization simple; track a cursor if history grows large.
+    const rows = []
+    for (
+      let period = firstRecurringPeriod(rule.startDate, rule.recurrenceDay);
+      period <= throughPeriod;
+      period = nextMonthPeriod(`${period}-01`)
+    ) {
+      rows.push({
+        amountMinor: rule.amountMinor,
+        categoryId: rule.categoryId,
+        creditCardId: rule.creditCardId,
+        currency: 'THB' as const,
+        description: rule.description,
+        dueDate: recurringDateForPeriod(period, rule.recurrenceDay),
+        id: randomUUID(),
+        paymentMethod: rule.paymentMethod,
+        recurrencePeriod: period,
+        recurringExpenseRuleId: rule.id,
+        status: 'unpaid' as const,
+      })
+    }
+    if (rows.length > 0) {
+      await database
+        .insert(recurringExpenseOccurrences)
+        .values(rows)
+        .onDuplicateKeyUpdate({
+          set: { id: sql`${recurringExpenseOccurrences.id}` },
+        })
+    }
+  }
+
+  return { throughPeriod }
+}
+
+async function getRecurringExpenseRule(database: Database, ruleId: string) {
+  const rule = (await listRecurringExpenseRules(database)).find(
+    ({ id }) => id === ruleId,
+  )
+  if (!rule) throw recurringRuleNotFound()
+  return rule
+}
+
+function firstRecurringPeriod(startDate: string, recurrenceDay: number) {
+  const startPeriod = startDate.slice(0, 7)
+  return recurringDateForPeriod(startPeriod, recurrenceDay) < startDate
+    ? nextMonthPeriod(startDate)
+    : startPeriod
+}
+
+function previousPeriod(period: string) {
+  const [year, month] = period.split('-').map(Number)
+  const previousMonth = (year ?? 0) * 12 + (month ?? 1) - 2
+  return `${Math.floor(previousMonth / 12)}-${String((previousMonth % 12) + 1).padStart(2, '0')}`
+}
+
+function todayInBangkok() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+  }).formatToParts(new Date())
+  const value = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value]),
+  )
+  return `${value.year}-${value.month}-${value.day}`
+}
+
+function recurringRuleNotFound() {
+  return new FinanceError('RECURRING_RULE_NOT_FOUND', 'ไม่พบรายการประจำ', 404)
+}
+
 export async function listTransactions(
   database: Database,
   filters: TransactionFilters,
@@ -881,9 +1286,12 @@ async function prepareTransactionValues(
   }
 }
 
-async function validateInstallmentReferences(
+async function validateExpenseReferences(
   database: QueryDatabase,
-  input: InstallmentPlanInput,
+  input: Pick<
+    InstallmentPlanInput,
+    'categoryId' | 'creditCardId' | 'paymentMethod'
+  >,
 ) {
   const [category] = await database
     .select({
@@ -938,6 +1346,8 @@ async function validateInstallmentReferences(
 
   return { categoryId: category.id, creditCardId }
 }
+
+const validateInstallmentReferences = validateExpenseReferences
 
 function normalizeCardName(value: string): string {
   const normalized = value.trim().replaceAll(/\s+/g, ' ')
