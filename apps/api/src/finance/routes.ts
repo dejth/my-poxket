@@ -18,6 +18,7 @@ import {
   createInstallmentPlan,
   createRecurringExpenseRule,
   createTransaction,
+  getDashboardSummary,
   getTransaction,
   listCategories,
   listCreditCards,
@@ -28,6 +29,7 @@ import {
   materializeRecurringExpenseRules,
   setCategoryActive,
   setCreditCardActive,
+  setCreditCardStatementPayment,
   setInstallmentOccurrenceStatus,
   setRecurringOccurrenceStatus,
   stopRecurringExpenseRule,
@@ -143,6 +145,19 @@ const statementQuerySchema = z
   .refine(({ dateFrom, dateTo }) => dateFrom <= dateTo, {
     message: 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด',
   })
+const periodSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}$/)
+  .refine((period) => isValidLocalDate(`${period}-01`))
+const dashboardQuerySchema = z.object({ period: periodSchema })
+const statementPaymentSchema = z.discriminatedUnion('status', [
+  z.object({
+    paidAmount: z.string().min(1).max(32),
+    paidDate: localDateSchema,
+    status: z.literal('paid'),
+  }),
+  z.object({ status: z.literal('unpaid') }),
+])
 
 interface FinanceRoutesOptions {
   readonly config: ApiConfig
@@ -262,6 +277,52 @@ export function registerFinanceRoutes(
       return reply.send({
         items: await listCreditCardStatements(database, query.data),
       })
+    } catch (error) {
+      return sendFinanceError(reply, error)
+    }
+  })
+
+  app.patch(
+    '/api/credit-card-statements/:cardId/:statementEndDate/payment',
+    async (request, reply) => {
+      const session = await authorizeMutation(
+        request,
+        reply,
+        cookieName,
+        database,
+      )
+      if (!session) return
+      const params = z
+        .object({
+          cardId: identifierSchema,
+          statementEndDate: localDateSchema,
+        })
+        .safeParse(request.params)
+      const input = statementPaymentSchema.safeParse(request.body)
+      if (!params.success || !input.success) return sendInvalidInput(reply)
+
+      try {
+        return reply.send(
+          await setCreditCardStatementPayment(
+            database,
+            params.data.cardId,
+            params.data.statementEndDate,
+            input.data,
+          ),
+        )
+      } catch (error) {
+        return sendFinanceError(reply, error)
+      }
+    },
+  )
+
+  app.get('/api/dashboard-summary', async (request, reply) => {
+    const session = await authenticate(request, reply, cookieName, database)
+    if (!session) return
+    const query = dashboardQuerySchema.safeParse(request.query)
+    if (!query.success) return sendInvalidInput(reply)
+    try {
+      return reply.send(await getDashboardSummary(database, query.data.period))
     } catch (error) {
       return sendFinanceError(reply, error)
     }

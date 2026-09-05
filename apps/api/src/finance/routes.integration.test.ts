@@ -10,6 +10,7 @@ import { createDatabase } from '../database/client.js'
 import {
   categories,
   creditCards,
+  creditCardStatementPayments,
   installmentOccurrences,
   installmentPlans,
   recurringExpenseOccurrences,
@@ -18,6 +19,7 @@ import {
   transactions,
   users,
 } from '../database/schema.js'
+import { getDashboardSummary, todayInBangkok } from './service.js'
 
 const databaseUrl = process.env.TEST_DATABASE_URL
 const describeWithDatabase = databaseUrl ? describe : describe.skip
@@ -46,6 +48,7 @@ describeWithDatabase('finance API with MariaDB', () => {
     await database.delete(recurringExpenseRules)
     await database.delete(installmentOccurrences)
     await database.delete(installmentPlans)
+    await database.delete(creditCardStatementPayments)
     await deleteTransactionHistory()
     await database.delete(creditCards)
     await database.delete(categories)
@@ -75,6 +78,7 @@ describeWithDatabase('finance API with MariaDB', () => {
     await database.delete(recurringExpenseRules)
     await database.delete(installmentOccurrences)
     await database.delete(installmentPlans)
+    await database.delete(creditCardStatementPayments)
     await deleteTransactionHistory()
     await database.delete(creditCards)
     await database.delete(categories)
@@ -87,6 +91,7 @@ describeWithDatabase('finance API with MariaDB', () => {
     await database.delete(recurringExpenseRules)
     await database.delete(installmentOccurrences)
     await database.delete(installmentPlans)
+    await database.delete(creditCardStatementPayments)
     await deleteTransactionHistory()
     await database.delete(creditCards)
     await database.delete(categories)
@@ -443,6 +448,241 @@ describeWithDatabase('finance API with MariaDB', () => {
         statementEndDate: '2026-09-17',
       }),
     ])
+  })
+
+  it('reconciles activity, cash flow, payables, and early-payoff history', async () => {
+    expect(todayInBangkok(new Date('2026-08-31T16:59:59.999Z'))).toBe(
+      '2026-08-31',
+    )
+    expect(todayInBangkok(new Date('2026-08-31T17:00:00.000Z'))).toBe(
+      '2026-09-01',
+    )
+    const incomeCategory = await createCategory('income', 'รายได้สรุปสมมติ')
+    const expenseCategory = await createCategory('expense', 'รายจ่ายสรุปสมมติ')
+    const card = await createCreditCard({
+      cutoffDay: 17,
+      dueDay: 1,
+      maskedSuffix: '1234',
+      name: 'บัตรสรุปสมมติ',
+    })
+    await createTransaction(incomeCategory.id, {
+      amount: '5000',
+      description: 'รายรับตัวอย่าง',
+      direction: 'income',
+      paymentMethod: 'bank_transfer',
+      transactionDate: '2026-09-01',
+    })
+    await createTransaction(expenseCategory.id, {
+      amount: '100',
+      description: 'เงินสดตัวอย่าง',
+      direction: 'expense',
+      paymentMethod: 'cash',
+      transactionDate: '2026-09-01',
+    })
+    await createTransaction(expenseCategory.id, {
+      amount: '300',
+      creditCardId: card.id,
+      description: 'ยอดซื้อบัตรตัวอย่าง',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      transactionDate: '2026-09-17',
+    })
+
+    const installments = await createInstallmentPlan({
+      categoryId: expenseCategory.id,
+      description: 'แผนผ่อนตัวอย่าง',
+      firstPaymentDate: '2026-09-01',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '100',
+      paymentMethod: 'bank_transfer',
+      totalInstallments: 2,
+    })
+    await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        paidAmount: '150',
+        paidDate: '2026-09-01',
+        status: 'paid',
+      },
+      url: `/api/installment-plans/${installments.id}/occurrences/1`,
+    })
+
+    const settlementPlan = await createInstallmentPlan({
+      categoryId: expenseCategory.id,
+      description: 'ปิดยอดก่อนกำหนดตัวอย่าง',
+      firstPaymentDate: '2026-09-02',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '100',
+      paymentMethod: 'bank_transfer',
+      totalInstallments: 3,
+    })
+    await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        closesPlan: true,
+        paidAmount: '900',
+        paidDate: '2026-09-02',
+        status: 'paid',
+      },
+      url: `/api/installment-plans/${settlementPlan.id}/occurrences/1`,
+    })
+
+    const recurringResponse = await createRecurringExpenseResponse({
+      amount: '50',
+      categoryId: expenseCategory.id,
+      description: 'รายการประจำสรุปสมมติ',
+      idempotencyKey: randomUUID(),
+      paymentMethod: 'bank_transfer',
+      recurrenceDay: 1,
+      startDate: '2026-09-01',
+    })
+    const recurring = recurringResponse.json<{ id: string }>()
+    await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        paidAmount: '55',
+        paidDate: '2026-09-01',
+        status: 'paid',
+      },
+      url: `/api/recurring-expenses/${recurring.id}/occurrences/2026-09`,
+    })
+
+    const initialSummary = await getDashboard('2026-09')
+    const summaryResponse = await app.inject({
+      headers: { cookie },
+      method: 'GET',
+      url: '/api/dashboard-summary?period=2026-09',
+    })
+    expect(summaryResponse.statusCode).toBe(200)
+    expect(initialSummary.activity).toEqual(
+      expect.objectContaining({
+        expenseMinor: '40000',
+        incomeMinor: '500000',
+        netMinor: '460000',
+      }),
+    )
+    expect(initialSummary.cashFlow).toEqual({
+      inflowMinor: '500000',
+      netMinor: '379500',
+      outflowMinor: '120500',
+    })
+    expect(initialSummary.payables).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amountMinor: '30000',
+          dueDate: '2026-09-30',
+          officialDueDate: '2026-10-01',
+          source: 'credit_card_statement',
+        }),
+        expect.objectContaining({
+          amountMinor: '10000',
+          dueDate: '2026-10-01',
+          source: 'installment',
+        }),
+        expect.objectContaining({
+          amountMinor: '5000',
+          dueDate: '2026-10-01',
+          source: 'recurring',
+        }),
+      ]),
+    )
+    expect(
+      initialSummary.payables.some(({ title }) =>
+        title.includes('ปิดยอดก่อนกำหนด'),
+      ),
+    ).toBe(false)
+    const settlementHistory = initialSummary.history.filter(({ title }) =>
+      title.includes('ปิดยอดก่อนกำหนด'),
+    )
+    expect(settlementHistory).toHaveLength(1)
+    expect(settlementHistory[0]).toEqual(
+      expect.objectContaining({ amountMinor: '90000', status: 'paid' }),
+    )
+    expect(settlementHistory[0]?.context).toContain('ปิดยอดก่อนกำหนด')
+
+    const overdueSummary = await getDashboardSummary(
+      database,
+      '2026-09',
+      '2026-10-02',
+    )
+    const overdueItems = overdueSummary.payables.filter(
+      ({ dueDate }) => dueDate <= '2026-10-01',
+    )
+    expect(overdueItems).toHaveLength(3)
+    expect(overdueItems.every(({ status }) => status === 'overdue')).toBe(true)
+
+    const octoberSummary = await getDashboard('2026-10')
+    expect(octoberSummary.payables).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: 'ปิดยอดก่อนกำหนดตัวอย่าง' }),
+      ]),
+    )
+    expect(octoberSummary.history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: 'cancelled',
+          title: 'ปิดยอดก่อนกำหนดตัวอย่าง',
+        }),
+      ]),
+    )
+
+    const paidStatement = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        paidAmount: '310',
+        paidDate: '2026-09-30',
+        status: 'paid',
+      },
+      url: `/api/credit-card-statements/${card.id}/2026-09-17/payment`,
+    })
+    expect(paidStatement.statusCode).toBe(200)
+    expect(paidStatement.json()).toEqual(
+      expect.objectContaining({
+        paidAmountMinor: '31000',
+        paidDate: '2026-09-30',
+        status: 'paid',
+      }),
+    )
+
+    const paidSummary = await getDashboard('2026-09')
+    expect(paidSummary.cashFlow).toEqual({
+      inflowMinor: '500000',
+      netMinor: '348500',
+      outflowMinor: '151500',
+    })
+    expect(
+      paidSummary.payables.some(
+        ({ source }) => source === 'credit_card_statement',
+      ),
+    ).toBe(false)
+    expect(paidSummary.history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amountMinor: '31000',
+          source: 'credit_card_statement',
+          status: 'paid',
+        }),
+      ]),
+    )
+
+    const reverted = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: { status: 'unpaid' },
+      url: `/api/credit-card-statements/${card.id}/2026-09-17/payment`,
+    })
+    expect(reverted.statusCode).toBe(200)
+    expect(reverted.json()).toEqual(
+      expect.objectContaining({
+        paidAmountMinor: null,
+        paidDate: null,
+        status: 'unpaid',
+      }),
+    )
   })
 
   it('generates exact installments once across concurrent retries', async () => {
@@ -940,6 +1180,10 @@ describeWithDatabase('finance API with MariaDB', () => {
     })
     expect(response.statusCode).toBe(200)
     return response.json<{ items: unknown[] }>().items
+  }
+
+  async function getDashboard(period: string) {
+    return getDashboardSummary(database, period, '2026-09-01')
   }
 
   async function createTransaction(

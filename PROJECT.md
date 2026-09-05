@@ -122,7 +122,9 @@ date is used instead.
 Statements are derived from active linked purchases rather than persisted as
 snapshots. Card date rules are immutable in this phase: deactivate the old
 configuration and create a uniquely named replacement when rules change.
-Paid/unpaid statement workflow remains part of Issue #6.
+Issue #6 stores only statement payment state, the actual amount paid, and the
+local payment date. Monthly activity still includes the card purchase, while
+cash flow includes the later statement payment instead of counting both.
 
 ## Repository structure
 
@@ -158,7 +160,7 @@ No database dump is committed to Git.
 3. Issue #3 — Credit cards, statements, and planned payments (complete).
 4. Issue #4 — Installments with `N/N` and paid-state tracking (complete).
 5. Issue #5 — Recurring expenses and idempotent occurrences (complete; owner UAT passed).
-6. Issue #6 — Monthly activity and upcoming payables without double counting.
+6. Issue #6 — Monthly activity and upcoming payables without double counting (complete; owner UAT passed).
 7. Issue #7 — Responsive polish, accessibility, and fictional portfolio screenshots.
 8. Issue #8 — Plesk artifact preparation and dry run.
 9. Separately approved production deployment and post-deploy verification.

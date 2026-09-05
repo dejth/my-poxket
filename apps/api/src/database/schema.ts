@@ -212,6 +212,49 @@ export const transactions = mysqlTable(
   ],
 )
 
+export const creditCardStatementPayments = mysqlTable(
+  'credit_card_statement_payments',
+  {
+    id: char('id', { length: 36 }).notNull(),
+    creditCardId: char('credit_card_id', { length: 36 })
+      .notNull()
+      .references(() => creditCards.id, { onDelete: 'restrict' }),
+    statementEndDate: date('statement_end_date', { mode: 'string' }).notNull(),
+    status: mysqlEnum('status', ['unpaid', 'paid']).notNull().default('unpaid'),
+    paidAmountMinor: bigint('paid_amount_minor', {
+      mode: 'bigint',
+      unsigned: true,
+    }),
+    paidDate: date('paid_date', { mode: 'string' }),
+    createdAt: datetime('created_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: datetime('updated_at', { fsp: 6, mode: 'date' })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(6)`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id] }),
+    uniqueIndex('credit_card_statement_payments_statement_unique').on(
+      table.creditCardId,
+      table.statementEndDate,
+    ),
+    check(
+      'credit_card_statement_payments_paid_values',
+      sql`(${table.status} = 'paid' AND ${table.paidDate} IS NOT NULL AND ${table.paidAmountMinor} IS NOT NULL) OR (${table.status} = 'unpaid' AND ${table.paidDate} IS NULL AND ${table.paidAmountMinor} IS NULL)`,
+    ),
+    check(
+      'credit_card_statement_payments_amount_range',
+      sql`${table.paidAmountMinor} IS NULL OR (${table.paidAmountMinor} > 0 AND ${table.paidAmountMinor} <= 99999999999)`,
+    ),
+    index('credit_card_statement_payments_status_date_index').on(
+      table.status,
+      table.paidDate,
+    ),
+  ],
+)
+
 export const installmentPlans = mysqlTable(
   'installment_plans',
   {
