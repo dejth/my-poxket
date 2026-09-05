@@ -22,6 +22,7 @@ export const users = mysqlTable(
   'users',
   {
     id: char('id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 100 }).notNull(),
     username: varchar('username', { length: 64 }).notNull(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     role: mysqlEnum('role', ['owner', 'member']).notNull().default('member'),

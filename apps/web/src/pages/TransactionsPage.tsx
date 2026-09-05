@@ -1,15 +1,9 @@
-import {
-  type ChangeEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { QueryError } from '../app/QueryError'
+import { type ChangeEvent, useCallback, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import {
@@ -27,6 +21,7 @@ import {
   type TransactionFilters,
   type TransactionInput,
 } from '../app/api'
+import { Modal } from '../app/Modal'
 import { ActionNotice } from '../app/ActionNotice'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 import {
@@ -75,6 +70,8 @@ type TransactionFormValues = z.infer<typeof transactionSchema>
 export function TransactionsPage() {
   const { session } = useAuthenticatedContext()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const quickAddFromPage = useLocation().state === 'quick-add'
   const [searchParams, setSearchParams] = useSearchParams()
   const quickAddRequested = searchParams.get('action') === 'new'
   const [filters, setFilters] = useState<TransactionFilters>({
@@ -117,10 +114,20 @@ export function TransactionsPage() {
   const closeForm = useCallback(() => {
     setFormTarget(null)
     if (!quickAddRequested) return
+    if (quickAddFromPage) {
+      void navigate(-1)
+      return
+    }
     const nextParams = new URLSearchParams(searchParams)
     nextParams.delete('action')
     setSearchParams(nextParams, { replace: true })
-  }, [quickAddRequested, searchParams, setSearchParams])
+  }, [
+    navigate,
+    quickAddFromPage,
+    quickAddRequested,
+    searchParams,
+    setSearchParams,
+  ])
 
   return (
     <main className="page-shell">
@@ -160,17 +167,27 @@ export function TransactionsPage() {
         {transactionsQuery.isPending ||
         categoriesQuery.isPending ||
         creditCardsQuery.isPending ? (
-          <p className="muted-state" aria-busy="true">
+          <p className="muted-state" aria-busy="true" role="status">
             กำลังโหลดรายการ…
           </p>
         ) : transactionsQuery.isError ||
           categoriesQuery.isError ||
           creditCardsQuery.isError ? (
-          <p className="inline-error" role="alert">
-            {transactionsQuery.error?.message ??
+          <QueryError
+            message={
+              transactionsQuery.error?.message ??
               categoriesQuery.error?.message ??
-              creditCardsQuery.error?.message}
-          </p>
+              creditCardsQuery.error?.message ??
+              'โหลดข้อมูลไม่สำเร็จ'
+            }
+            onRetry={() => {
+              void Promise.all([
+                transactionsQuery.refetch(),
+                categoriesQuery.refetch(),
+                creditCardsQuery.refetch(),
+              ])
+            }}
+          />
         ) : transactions.length === 0 ? (
           <div className="empty-list">
             <h2>ยังไม่มีรายการ</h2>
@@ -249,13 +266,16 @@ export function TransactionsPage() {
                 ? 'บันทึกรายการแล้ว'
                 : 'แก้ไขรายการแล้ว พร้อมเก็บประวัติเดิม',
             )
-            closeForm()
             await Promise.all([
               queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+              queryClient.invalidateQueries({
+                queryKey: ['dashboard-summary'],
+              }),
               queryClient.invalidateQueries({
                 queryKey: ['credit-card-statements'],
               }),
             ])
+            closeForm()
           }}
           sessionCsrfToken={session.csrfToken}
           target={activeFormTarget}
@@ -494,25 +514,10 @@ function TransactionFormDialog({
     },
     onSuccess: onSaved,
   })
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    closeButtonRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section
-        aria-labelledby="transaction-form-title"
-        aria-modal="true"
-        className="form-dialog"
-        role="dialog"
-      >
+    <Modal labelledBy="transaction-form-title" onClose={onClose}>
+      <section aria-labelledby="transaction-form-title" className="form-dialog">
         <div className="dialog-heading">
           <div>
             <p className="eyebrow">
@@ -526,7 +531,6 @@ function TransactionFormDialog({
             aria-label="ปิด"
             className="icon-button"
             onClick={onClose}
-            ref={closeButtonRef}
             type="button"
           >
             ×
@@ -576,31 +580,68 @@ function TransactionFormDialog({
             จำนวนเงิน (บาท)
             <input
               aria-invalid={Boolean(form.formState.errors.amount)}
+              aria-describedby={
+                form.formState.errors.amount
+                  ? 'TransactionsPage-amount-error'
+                  : undefined
+              }
               inputMode="decimal"
               placeholder="0.00"
               {...form.register('amount')}
             />
             {form.formState.errors.amount ? (
-              <small>{form.formState.errors.amount.message}</small>
+              <small id="TransactionsPage-amount-error" role="alert">
+                {form.formState.errors.amount.message}
+              </small>
             ) : null}
           </label>
           <label className="field">
             วันที่รายการ
-            <input type="date" {...form.register('transactionDate')} />
+            <input
+              aria-invalid={Boolean(form.formState.errors.transactionDate)}
+              aria-describedby={
+                form.formState.errors.transactionDate
+                  ? 'TransactionsPage-transactionDate-error'
+                  : undefined
+              }
+              type="date"
+              {...form.register('transactionDate')}
+            />
             {form.formState.errors.transactionDate ? (
-              <small>{form.formState.errors.transactionDate.message}</small>
+              <small id="TransactionsPage-transactionDate-error" role="alert">
+                {form.formState.errors.transactionDate.message}
+              </small>
             ) : null}
           </label>
           <label className="field">
             รายละเอียด
-            <input autoComplete="off" {...form.register('description')} />
+            <input
+              aria-invalid={Boolean(form.formState.errors.description)}
+              aria-describedby={
+                form.formState.errors.description
+                  ? 'TransactionsPage-description-error'
+                  : undefined
+              }
+              autoComplete="off"
+              {...form.register('description')}
+            />
             {form.formState.errors.description ? (
-              <small>{form.formState.errors.description.message}</small>
+              <small id="TransactionsPage-description-error" role="alert">
+                {form.formState.errors.description.message}
+              </small>
             ) : null}
           </label>
           <label className="field">
             หมวดหมู่
-            <select {...form.register('categoryId')}>
+            <select
+              aria-invalid={Boolean(form.formState.errors.categoryId)}
+              aria-describedby={
+                form.formState.errors.categoryId
+                  ? 'TransactionsPage-categoryId-error'
+                  : undefined
+              }
+              {...form.register('categoryId')}
+            >
               <option value="">เลือกหมวดหมู่</option>
               {availableCategories.map((category) => (
                 <option key={category.id} value={category.id}>
@@ -610,7 +651,9 @@ function TransactionFormDialog({
               ))}
             </select>
             {form.formState.errors.categoryId ? (
-              <small>{form.formState.errors.categoryId.message}</small>
+              <small id="TransactionsPage-categoryId-error" role="alert">
+                {form.formState.errors.categoryId.message}
+              </small>
             ) : null}
           </label>
           <label className="field">
@@ -640,7 +683,15 @@ function TransactionFormDialog({
           {paymentMethod === 'credit_card' ? (
             <label className="field">
               บัตรเครดิต
-              <select {...form.register('creditCardId')}>
+              <select
+                aria-invalid={Boolean(form.formState.errors.creditCardId)}
+                aria-describedby={
+                  form.formState.errors.creditCardId
+                    ? 'TransactionsPage-creditCardId-error'
+                    : undefined
+                }
+                {...form.register('creditCardId')}
+              >
                 <option value="">เลือกบัตรเครดิต</option>
                 {availableCreditCards.map((card) => (
                   <option key={card.id} value={card.id}>
@@ -650,7 +701,9 @@ function TransactionFormDialog({
                 ))}
               </select>
               {form.formState.errors.creditCardId ? (
-                <small>{form.formState.errors.creditCardId.message}</small>
+                <small id="TransactionsPage-creditCardId-error" role="alert">
+                  {form.formState.errors.creditCardId.message}
+                </small>
               ) : null}
             </label>
           ) : null}
@@ -683,7 +736,7 @@ function TransactionFormDialog({
           </div>
         </form>
       </section>
-    </div>
+    </Modal>
   )
 }
 

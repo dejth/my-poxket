@@ -1,5 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +18,7 @@ import { formatThbMinor } from './finance-format'
 import { InstallmentsPage } from './InstallmentsPage'
 import { RecurringExpensesPage } from './RecurringExpensesPage'
 import { TransactionsPage } from './TransactionsPage'
+import { AppShell } from '../app/AppShell'
 
 const session = {
   csrfToken: 'fictional-csrf-token',
@@ -23,6 +31,31 @@ afterEach(() => {
 })
 
 describe('finance pages', () => {
+  it('retries category loading and associates validation errors with the field', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: () => Promise.resolve({ message: 'โหลดไม่สำเร็จ' }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ items: [] }),
+      })
+    vi.stubGlobal('fetch', fetch)
+    renderPage(<CategoriesPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'ลองอีกครั้ง' }))
+    expect(
+      await screen.findByText('ยังไม่มีหมวดหมู่ เพิ่มรายการแรกได้เลย'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'เพิ่มหมวดหมู่' }))
+    expect(await screen.findByText('กรุณาระบุชื่อหมวดหมู่')).toBeInTheDocument()
+    const input = screen.getByRole('textbox')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input).toHaveAccessibleDescription('กรุณาระบุชื่อหมวดหมู่')
+  })
+
   it('renders responsive transaction semantics and opens the focused form', async () => {
     stubFinanceFetch({
       cards: [fictionalCard],
@@ -57,6 +90,86 @@ describe('finance pages', () => {
     expect(
       await screen.findByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
     ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['/', 'cancel'],
+    ['/credit-cards?view=history#statements', 'cancel'],
+    ['/installments', 'save'],
+    ['/transactions', 'save'],
+  ])('returns quick-add from %s after %s', async (origin, action) => {
+    stubFinanceFetch({
+      categories: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          direction: 'expense',
+          name: 'อาหารสมมติ',
+          isActive: true,
+        },
+      ],
+      transactions: [],
+    })
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(['dashboard-summary', '2026-09'], {})
+    const router = createMemoryRouter(
+      [
+        {
+          element: (
+            <AppShell
+              session={session}
+              isSigningOut={false}
+              onSignOut={() => {}}
+            />
+          ),
+          children: [
+            { path: '/transactions', element: <TransactionsPage /> },
+            { path: '*', element: <h1>หน้าก่อนหน้า</h1> },
+          ],
+        },
+      ],
+      { initialEntries: [origin] },
+    )
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole('link', { name: 'เพิ่มรายการด่วน' }))
+    const dialog = await screen.findByRole('dialog', {
+      name: 'เพิ่มรายรับหรือรายจ่าย',
+    })
+    if (action === 'cancel') {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'ยกเลิก' }))
+    } else {
+      await within(dialog).findByRole('option', { name: 'อาหารสมมติ' })
+      fireEvent.change(within(dialog).getByLabelText('จำนวนเงิน (บาท)'), {
+        target: { value: '100' },
+      })
+      fireEvent.change(within(dialog).getByLabelText('รายละเอียด'), {
+        target: { value: 'รายการสมมติ' },
+      })
+      fireEvent.change(within(dialog).getByLabelText('หมวดหมู่'), {
+        target: { value: '11111111-1111-4111-8111-111111111111' },
+      })
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'บันทึกรายการ' }),
+      )
+    }
+    await waitFor(() =>
+      expect(
+        `${router.state.location.pathname}${router.state.location.search}${router.state.location.hash}`,
+      ).toBe(origin),
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    if (action === 'save')
+      expect(
+        queryClient.getQueryState(['dashboard-summary', '2026-09'])
+          ?.isInvalidated,
+      ).toBe(true)
   })
 
   it('shows active and inactive categories without hiding history', async () => {

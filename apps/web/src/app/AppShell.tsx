@@ -20,6 +20,9 @@ const navigation = [
 export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        ข้ามไปเนื้อหา
+      </a>
       <aside className="app-sidebar">
         <NavLink className="app-brand" to="/" aria-label="My Poxket">
           <span className="brand-mark" aria-hidden="true">
@@ -42,6 +45,11 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
           ))}
         </nav>
         <div className="sidebar-account">
+          {session.user.role === 'owner' ? (
+            <NavLink className="nav-link" to="/users">
+              ผู้ใช้
+            </NavLink>
+          ) : null}
           <span className="account-name">{session.user.username}</span>
           <button
             className="text-button"
@@ -71,12 +79,22 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
             {isSigningOut ? 'กำลังออก…' : 'ออกจากระบบ'}
           </button>
         </header>
-        <Outlet context={{ session }} />
+        <div id="main-content" tabIndex={-1}>
+          <Outlet context={{ session }} />
+          {session.user.role === 'owner' ? (
+            <div className="mobile-users-link">
+              <Link className="text-button" to="/users">
+                จัดการผู้ใช้
+              </Link>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <Link
         aria-label="เพิ่มรายการด่วน"
         className="mobile-quick-add"
+        state="quick-add"
         to="/transactions?action=new"
       >
         <span aria-hidden="true">+</span>

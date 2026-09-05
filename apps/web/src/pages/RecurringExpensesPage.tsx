@@ -1,9 +1,11 @@
+import { QueryError } from '../app/QueryError'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
+import { Modal } from '../app/Modal'
 import { ActionNotice } from '../app/ActionNotice'
 import {
   createRecurringExpense,
@@ -222,13 +224,16 @@ export function RecurringExpensesPage() {
 
       <ActionNotice message={notice} setMessage={setNotice} />
       {rulesQuery.isPending ? (
-        <p className="muted-state" aria-busy="true">
+        <p className="muted-state" aria-busy="true" role="status">
           กำลังโหลดรายการประจำ…
         </p>
       ) : rulesQuery.isError ? (
-        <p className="inline-error" role="alert">
-          ไม่สามารถโหลดรายการประจำได้
-        </p>
+        <QueryError
+          message="ไม่สามารถโหลดรายการประจำได้"
+          onRetry={() => {
+            void rulesQuery.refetch()
+          }}
+        />
       ) : rules.length === 0 ? (
         <section className="surface empty-list">
           <h2>ยังไม่มีรายการประจำ</h2>
@@ -253,17 +258,20 @@ export function RecurringExpensesPage() {
       )}
 
       {isFormOpen ? (
-        <div className="dialog-backdrop" role="presentation">
+        <Modal
+          labelledBy="recurring-form-title"
+          onClose={() => {
+            if (!saveMutation.isPending) setIsFormOpen(false)
+          }}
+        >
           <form
             aria-labelledby="recurring-form-title"
-            aria-modal="true"
             className="form-dialog transaction-form"
             onSubmit={(event) =>
               void form.handleSubmit((values) => saveMutation.mutate(values))(
                 event,
               )
             }
-            role="dialog"
           >
             <div className="dialog-heading">
               <div>
@@ -285,24 +293,63 @@ export function RecurringExpensesPage() {
             </div>
             <label className="field">
               ชื่อรายการ
-              <input {...form.register('description')} />
+              <input
+                aria-invalid={Boolean(form.formState.errors.description)}
+                aria-describedby={
+                  form.formState.errors.description
+                    ? 'RecurringExpensesPage-description-error'
+                    : undefined
+                }
+                {...form.register('description')}
+              />
               <FieldError
+                id="RecurringExpensesPage-description-error"
                 message={form.formState.errors.description?.message}
               />
             </label>
             <label className="field">
               จำนวนเงิน (บาท)
-              <input inputMode="decimal" {...form.register('amount')} />
-              <FieldError message={form.formState.errors.amount?.message} />
+              <input
+                aria-invalid={Boolean(form.formState.errors.amount)}
+                aria-describedby={
+                  form.formState.errors.amount
+                    ? 'RecurringExpensesPage-amount-error'
+                    : undefined
+                }
+                inputMode="decimal"
+                {...form.register('amount')}
+              />
+              <FieldError
+                id="RecurringExpensesPage-amount-error"
+                message={form.formState.errors.amount?.message}
+              />
             </label>
             <label className="field">
               วันเริ่มต้น
-              <input type="date" {...form.register('startDate')} />
-              <FieldError message={form.formState.errors.startDate?.message} />
+              <input
+                aria-invalid={Boolean(form.formState.errors.startDate)}
+                aria-describedby={
+                  form.formState.errors.startDate
+                    ? 'RecurringExpensesPage-startDate-error'
+                    : undefined
+                }
+                type="date"
+                {...form.register('startDate')}
+              />
+              <FieldError
+                id="RecurringExpensesPage-startDate-error"
+                message={form.formState.errors.startDate?.message}
+              />
             </label>
             <label className="field">
               วันที่เกิดรายการทุกเดือน
               <input
+                aria-invalid={Boolean(form.formState.errors.recurrenceDay)}
+                aria-describedby={
+                  form.formState.errors.recurrenceDay
+                    ? 'RecurringExpensesPage-recurrenceDay-error'
+                    : undefined
+                }
                 inputMode="numeric"
                 min={1}
                 max={31}
@@ -310,12 +357,21 @@ export function RecurringExpensesPage() {
                 {...form.register('recurrenceDay', { valueAsNumber: true })}
               />
               <FieldError
+                id="RecurringExpensesPage-recurrenceDay-error"
                 message={form.formState.errors.recurrenceDay?.message}
               />
             </label>
             <label className="field">
               หมวดรายจ่าย
-              <select {...form.register('categoryId')}>
+              <select
+                aria-invalid={Boolean(form.formState.errors.categoryId)}
+                aria-describedby={
+                  form.formState.errors.categoryId
+                    ? 'RecurringExpensesPage-categoryId-error'
+                    : undefined
+                }
+                {...form.register('categoryId')}
+              >
                 <option value="">เลือกหมวดหมู่</option>
                 {expenseCategories.map((category) => (
                   <option key={category.id} value={category.id}>
@@ -323,7 +379,10 @@ export function RecurringExpensesPage() {
                   </option>
                 ))}
               </select>
-              <FieldError message={form.formState.errors.categoryId?.message} />
+              <FieldError
+                id="RecurringExpensesPage-categoryId-error"
+                message={form.formState.errors.categoryId?.message}
+              />
             </label>
             <label className="field">
               วิธีชำระ
@@ -338,7 +397,15 @@ export function RecurringExpensesPage() {
             {paymentMethod === 'credit_card' ? (
               <label className="field">
                 บัตรเครดิต
-                <select {...form.register('creditCardId')}>
+                <select
+                  aria-invalid={Boolean(form.formState.errors.creditCardId)}
+                  aria-describedby={
+                    form.formState.errors.creditCardId
+                      ? 'RecurringExpensesPage-creditCardId-error'
+                      : undefined
+                  }
+                  {...form.register('creditCardId')}
+                >
                   <option value="">เลือกบัตร</option>
                   {activeCards.map((card) => (
                     <option key={card.id} value={card.id}>
@@ -349,6 +416,7 @@ export function RecurringExpensesPage() {
                   ))}
                 </select>
                 <FieldError
+                  id="RecurringExpensesPage-creditCardId-error"
                   message={form.formState.errors.creditCardId?.message}
                 />
               </label>
@@ -375,7 +443,7 @@ export function RecurringExpensesPage() {
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       ) : null}
 
       {pendingPayment ? (
@@ -533,13 +601,15 @@ function PaymentDialog({
   onConfirm: (amount: string, date: string) => void
 }) {
   return (
-    <div
-      className="dialog-backdrop payment-dialog-backdrop"
-      role="presentation"
+    <Modal
+      labelledBy="recurring-payment-title"
+      onClose={() => {
+        if (!isPending) onClose()
+      }}
+      payment
     >
       <form
         aria-labelledby="recurring-payment-title"
-        aria-modal="true"
         className="form-dialog payment-dialog-sheet"
         onSubmit={(event) => {
           event.preventDefault()
@@ -550,7 +620,6 @@ function PaymentDialog({
             onConfirm(amount, date)
           }
         }}
-        role="dialog"
       >
         <div className="payment-dialog-heading">
           <div>
@@ -596,7 +665,7 @@ function PaymentDialog({
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
 
@@ -612,17 +681,20 @@ function StopDialog({
   onConfirm: (action: 'cancel' | 'retain') => void
 }) {
   return (
-    <div className="dialog-backdrop" role="presentation">
+    <Modal
+      labelledBy="stop-recurring-title"
+      onClose={() => {
+        if (!isPending) onClose()
+      }}
+    >
       <form
         aria-labelledby="stop-recurring-title"
-        aria-modal="true"
         className="form-dialog"
         onSubmit={(event) => {
           event.preventDefault()
           const action = new FormData(event.currentTarget).get('action')
           if (action === 'cancel' || action === 'retain') onConfirm(action)
         }}
-        role="dialog"
       >
         <div className="dialog-heading">
           <div>
@@ -655,7 +727,7 @@ function StopDialog({
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
 
@@ -677,6 +749,16 @@ function minorToDecimal(value: string) {
   return `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`
 }
 
-function FieldError({ message }: { message: string | undefined }) {
-  return message ? <small>{message}</small> : null
+function FieldError({
+  id,
+  message,
+}: {
+  id: string
+  message: string | undefined
+}) {
+  return message ? (
+    <small id={id} role="alert">
+      {message}
+    </small>
+  ) : null
 }

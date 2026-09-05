@@ -1,3 +1,4 @@
+import { QueryError } from '../app/QueryError'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -106,13 +107,20 @@ export function DashboardPage() {
       <ActionNotice message={notice} setMessage={setNotice} />
 
       {summaryQuery.isPending ? (
-        <section className="surface dashboard-state" aria-busy="true">
+        <section
+          className="surface dashboard-state"
+          aria-busy="true"
+          role="status"
+        >
           กำลังสรุปข้อมูล…
         </section>
       ) : summaryQuery.isError ? (
-        <section className="surface dashboard-state inline-error" role="alert">
-          {summaryQuery.error.message}
-        </section>
+        <QueryError
+          message={summaryQuery.error.message}
+          onRetry={() => {
+            void summaryQuery.refetch()
+          }}
+        />
       ) : summary ? (
         <>
           <section aria-labelledby="activity-title">

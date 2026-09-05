@@ -1,3 +1,4 @@
+import { QueryError } from '../app/QueryError'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -101,12 +102,19 @@ export function CategoriesPage() {
             ชื่อหมวดหมู่
             <input
               aria-invalid={Boolean(form.formState.errors.name)}
+              aria-describedby={
+                form.formState.errors.name
+                  ? 'CategoriesPage-name-error'
+                  : undefined
+              }
               autoComplete="off"
               placeholder="เช่น อาหาร (ข้อมูลสมมติ)"
               {...form.register('name')}
             />
             {form.formState.errors.name ? (
-              <small>{form.formState.errors.name.message}</small>
+              <small id="CategoriesPage-name-error" role="alert">
+                {form.formState.errors.name.message}
+              </small>
             ) : null}
           </label>
 
@@ -143,13 +151,16 @@ export function CategoriesPage() {
           </div>
 
           {categoriesQuery.isPending ? (
-            <p className="muted-state" aria-busy="true">
+            <p className="muted-state" aria-busy="true" role="status">
               กำลังโหลดหมวดหมู่…
             </p>
           ) : categoriesQuery.isError ? (
-            <p className="inline-error" role="alert">
-              {categoriesQuery.error.message}
-            </p>
+            <QueryError
+              message={categoriesQuery.error.message}
+              onRetry={() => {
+                void categoriesQuery.refetch()
+              }}
+            />
           ) : categories.length === 0 ? (
             <p className="muted-state">ยังไม่มีหมวดหมู่ เพิ่มรายการแรกได้เลย</p>
           ) : (
