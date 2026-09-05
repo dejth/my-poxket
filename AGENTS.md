@@ -10,7 +10,7 @@ The root agent is the Lead and Integrator and remains accountable for scope, cor
 2. Inspect the current branch, working tree, recent history, package scripts, runtime configuration, database migrations, and deployment files.
 3. Preserve unrelated and pre-existing changes. Never discard, overwrite, reformat, or include them in a task without approval.
 4. Confirm the objective, in-scope and out-of-scope behavior, acceptance criteria, risks, dependencies, and validation plan.
-5. Identify whether the task is planning, implementation, UAT support, Git delivery, database migration, or Plesk deployment. Authorization for one stage does not imply authorization for another.
+5. Identify whether the task is planning, implementation, UAT support, Git delivery, database migration, or Plesk deployment. Owner UAT acceptance authorizes the develop delivery sequence defined below; production actions remain separately authorized.
 6. If referenced project files do not exist, report that fact and create only what the approved task requires.
 
 Do not guess missing financial rules, hosting capabilities, database coordinates, domains, GitHub identities, or production configuration. Ask when a missing choice would materially change the result.
@@ -308,13 +308,13 @@ Keep small, localized, and tightly coupled work in one agent. Never create a sub
 10. The Lead inspects and integrates every delegated result.
 11. Run required checks against the final integrated revision.
 
-Multi-agent use does not expand authorization. Agents must not commit, push, create a remote, create or mark a PR Ready, merge, close an Issue, delete branches, publish, deploy, change DNS, alter Plesk configuration, create databases/users, write secrets, apply remote migrations, or change infrastructure without the user's approval for that checkpoint.
+Multi-agent use does not expand authorization. Agents must not commit, push, create a remote, create or mark a PR Ready, merge, close an Issue, delete branches, publish, deploy, change DNS, alter Plesk configuration, create databases/users, write secrets, apply remote migrations, or change infrastructure without the user's authorization. Owner UAT acceptance supplies authorization for the develop delivery sequence below; the Lead remains responsible for executing or explicitly delegating it.
 
 ### Quota-aware execution and UAT
 
 - Use one agent by default and add a subagent only when the expected benefit justifies the additional usage.
 - During implementation, run targeted checks for changed behavior. Run the complete validation suite once on the integrated revision before review or Draft PR.
-- Do not use browser or computer control for routine visual UAT by default. The user performs manual UAT unless explicitly requesting agent-operated UAT.
+- Do not use browser skills or computer use for routine implementation or UAT. Use them only when genuinely necessary to complete the task or explicitly requested by the user; prefer code, tests, APIs, and CLI checks. Give the user a manual UAT checklist after implementation.
 - Give the user a concise UAT checklist with routes, fixtures, breakpoints, and expected outcomes.
 - Treat user UAT feedback as the next focused work item. Do not repeat unrelated discovery or broad validation prematurely.
 - Never claim UAT passed until the user confirms it.
@@ -329,7 +329,7 @@ Multi-agent use does not expand authorization. Agents must not commit, push, cre
 - Use the long-lived hierarchy `main` → `release` → `develop`. Create focused `tasks/<issue>-<slug>` branches from `develop`, merge them back into `develop` through CI-gated pull requests, then use separately approved promotions from `develop` to `release` and from `release` to `main`.
 - Treat `main` as the production release line once deployment automation is configured.
 - Use one GitHub Issue per feature or defect when GitHub governance is enabled.
-- Do not force-push, rewrite shared history, bypass protection, or delete branches without explicit approval and verified safety.
+- Never force-push, rewrite shared history, or bypass protection without explicit approval. Owner UAT acceptance authorizes cleanup of verified merged task branches only; preserve unrelated branches and uncommitted work.
 - If conflicts occur, report them and wait. Do not invent an alternate release path.
 
 ## Delivery checkpoints
@@ -339,15 +339,15 @@ Keep these stages explicit and report evidence at each stage:
 1. **Plan approved** — objective, scope, acceptance criteria, risks, stack/runtime impact, and validation agreed.
 2. **Implementation complete** — focused code and targeted tests completed; no publish action implied.
 3. **Local validation complete** — full required checks run against the integrated revision.
-4. **UAT** — user receives desktop/mobile checklists and confirms results; UAT does not authorize merge or deployment.
-5. **Commit/push/Draft PR** — requires user approval.
-6. **Ready/Merge** — separate approval after checks and review.
-7. **Issue closure and branch cleanup** — separate closeout evidence; delete only verified merged branches.
+4. **UAT** — after implementation and local validation, give the user a concise manual UAT checklist. Acceptance such as “pass”, “ผ่าน”, “ปิดงานได้”, or equivalent authorizes the complete develop delivery sequence in steps 5–7 without asking again.
+5. **Commit/push/PR** — after accepted UAT, commit the approved scope, push the task branch, and create or update its PR into `develop`.
+6. **CI-gated merge** — wait for all required CI checks and review requirements to pass for the current PR head, mark Ready if needed, and merge into `develop`. Fix failures within scope and rerun checks; do not bypass protections.
+7. **Cleanup and Issue synchronization** — verify the merged revision and develop CI, synchronize local `develop`, delete only verified merged task branches, and update/close the related Issues and roadmap so their status matches delivery. Preserve unrelated work and stop on conflicts.
 8. **Production promotion** — separate approved release flow.
 9. **Plesk deployment and production migration** — explicit approval after build, migration review, backup verification, and deployment plan.
 10. **Post-deploy verification** — verify deployed revision, authentication, database schema, smoke tests, logs, and local synchronization.
 
-“ปิด task” means close the work loop; it does not authorize archiving the Codex conversation.
+“ปิด task” or “ปิดงานได้” after UAT authorizes the develop delivery sequence above. It does not authorize archiving the Codex conversation, production promotion, deployment, or production migration.
 
 ## Plesk deployment rules
 

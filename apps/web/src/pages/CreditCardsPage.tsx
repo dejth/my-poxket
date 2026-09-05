@@ -1,3 +1,4 @@
+import { QueryError } from '../app/QueryError'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -106,12 +107,19 @@ export function CreditCardsPage() {
             ชื่อบัตร
             <input
               aria-invalid={Boolean(form.formState.errors.name)}
+              aria-describedby={
+                form.formState.errors.name
+                  ? 'CreditCardsPage-name-error'
+                  : undefined
+              }
               autoComplete="off"
               placeholder="เช่น บัตรตัวอย่าง"
               {...form.register('name')}
             />
             {form.formState.errors.name ? (
-              <small>{form.formState.errors.name.message}</small>
+              <small id="CreditCardsPage-name-error" role="alert">
+                {form.formState.errors.name.message}
+              </small>
             ) : null}
           </label>
 
@@ -119,6 +127,11 @@ export function CreditCardsPage() {
             เลขท้ายบัตร (ไม่บังคับ)
             <input
               aria-invalid={Boolean(form.formState.errors.maskedSuffix)}
+              aria-describedby={
+                form.formState.errors.maskedSuffix
+                  ? 'CreditCardsPage-maskedSuffix-error'
+                  : undefined
+              }
               autoComplete="off"
               inputMode="numeric"
               maxLength={4}
@@ -126,7 +139,9 @@ export function CreditCardsPage() {
               {...form.register('maskedSuffix')}
             />
             {form.formState.errors.maskedSuffix ? (
-              <small>{form.formState.errors.maskedSuffix.message}</small>
+              <small id="CreditCardsPage-maskedSuffix-error" role="alert">
+                {form.formState.errors.maskedSuffix.message}
+              </small>
             ) : null}
           </label>
 
@@ -135,6 +150,11 @@ export function CreditCardsPage() {
               วันสรุปยอด
               <input
                 aria-invalid={Boolean(form.formState.errors.cutoffDay)}
+                aria-describedby={
+                  form.formState.errors.cutoffDay
+                    ? 'CreditCardsPage-cutoffDay-error'
+                    : undefined
+                }
                 inputMode="numeric"
                 max={31}
                 min={1}
@@ -142,13 +162,20 @@ export function CreditCardsPage() {
                 {...form.register('cutoffDay', { valueAsNumber: true })}
               />
               {form.formState.errors.cutoffDay ? (
-                <small>ระบุวันที่ 1–31</small>
+                <small id="CreditCardsPage-cutoffDay-error" role="alert">
+                  ระบุวันที่ 1–31
+                </small>
               ) : null}
             </label>
             <label className="field">
               วันครบกำหนด
               <input
                 aria-invalid={Boolean(form.formState.errors.dueDay)}
+                aria-describedby={
+                  form.formState.errors.dueDay
+                    ? 'CreditCardsPage-dueDay-error'
+                    : undefined
+                }
                 inputMode="numeric"
                 max={31}
                 min={1}
@@ -156,7 +183,9 @@ export function CreditCardsPage() {
                 {...form.register('dueDay', { valueAsNumber: true })}
               />
               {form.formState.errors.dueDay ? (
-                <small>ระบุวันที่ 1–31</small>
+                <small id="CreditCardsPage-dueDay-error" role="alert">
+                  ระบุวันที่ 1–31
+                </small>
               ) : null}
             </label>
           </div>
@@ -188,13 +217,16 @@ export function CreditCardsPage() {
           </div>
 
           {cardsQuery.isPending ? (
-            <p className="muted-state" aria-busy="true">
+            <p className="muted-state" aria-busy="true" role="status">
               กำลังโหลดบัตร…
             </p>
           ) : cardsQuery.isError ? (
-            <p className="inline-error" role="alert">
-              {cardsQuery.error.message}
-            </p>
+            <QueryError
+              message={cardsQuery.error.message}
+              onRetry={() => {
+                void cardsQuery.refetch()
+              }}
+            />
           ) : cards.length === 0 ? (
             <p className="muted-state">ยังไม่มีบัตรเครดิต</p>
           ) : (
@@ -303,13 +335,16 @@ export function CreditCardsPage() {
           aria-label="รอบบัญชีบัตรเครดิต"
         >
           {statementsQuery.isPending ? (
-            <p className="muted-state" aria-busy="true">
+            <p className="muted-state" aria-busy="true" role="status">
               กำลังคำนวณรอบบัญชี…
             </p>
           ) : statementsQuery.isError ? (
-            <p className="inline-error" role="alert">
-              {statementsQuery.error.message}
-            </p>
+            <QueryError
+              message={statementsQuery.error.message}
+              onRetry={() => {
+                void statementsQuery.refetch()
+              }}
+            />
           ) : statements.length === 0 ? (
             <div className="empty-list">
               <h2>ยังไม่มียอดบัตรในช่วงนี้</h2>

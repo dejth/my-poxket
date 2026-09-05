@@ -45,8 +45,11 @@ remain deployment-time verification items.
 
 The schema permits `owner` and `member` login credentials that share the same
 private ledger. This is not multi-tenancy and does not create separate finance
-data per account. Account-management UI is not included in Bootstrap and needs
-confirmation before implementation.
+data per account. Issue #16 adds an owner-only user-management page with name,
+username, and password fields. Owners can create member accounts and edit any
+existing account without changing its role. Blank passwords on edit preserve
+the current password; changing a password revokes all sessions for that account.
+There is no role selector, account deletion, public registration, or recovery.
 
 ## Money and dates
 
@@ -65,8 +68,14 @@ confirmation before implementation.
 
 ## Transactions and categories
 
-- Categories are typed as `income` or `expense`, start empty, and can be
-  deactivated without breaking historical references.
+- Categories are typed as `income` or `expense` and can be deactivated without
+  breaking historical references. Issue #7 adds
+  general-purpose starter categories for income and expenses. Initialization
+  is safe to rerun without duplicates and preserves existing categories,
+  owner customizations, and financial history.
+- Run `npm run categories:init --workspace @my-poxket/api` after migrations to
+  add 5 income and 16 expense categories. This explicit command is additive;
+  it does not run on application startup or insert sample financial records.
 - Transactions use positive THB minor units up to `999,999,999.99`, with an
   explicit income/expense direction and local calendar date.
 - Initial non-card payment methods are cash, bank transfer, debit card, and
@@ -161,9 +170,17 @@ No database dump is committed to Git.
 4. Issue #4 — Installments with `N/N` and paid-state tracking (complete).
 5. Issue #5 — Recurring expenses and idempotent occurrences (complete; owner UAT passed).
 6. Issue #6 — Monthly activity and upcoming payables without double counting (complete; owner UAT passed).
-7. Issue #7 — Responsive polish, accessibility, and fictional portfolio screenshots.
-8. Issue #8 — Plesk artifact preparation and dry run.
-9. Separately approved production deployment and post-deploy verification.
+7. Issue #7 — Responsive polish, accessibility, general-purpose starter
+   income/expense categories, and return to the previous page after quick-add.
+   Portfolio screenshots are deferred until after production deployment and
+   are not an Issue #7 completion gate.
+8. Issue #8 — Owner-operated Plesk deployment handoff: step-by-step instructions,
+   scripts the owner can run on the server, and inspected build artifacts for
+   manual upload. Include configuration, migrations, category initialization,
+   backup/rollback instructions, dry-run validation, and a post-deploy checklist.
+   Verify hosting capabilities before finalizing server commands and paths.
+9. The owner performs production deployment and runs the supplied verification
+   steps. Issue #8 does not include agent-operated production deployment.
 
 Roadmap Issue #9 tracks the ordered MVP delivery plan and checkpoints.
 
@@ -171,5 +188,9 @@ The repository uses `main` → `release` → `develop` as its long-lived promoti
 path. Issue work starts from `develop` on `tasks/<issue>-<slug>` and returns to
 `develop` through a CI-gated pull request.
 
-Implementation, code-based validation, owner UAT, commit/push, merge, and
-production deployment remain separate approval checkpoints.
+After implementation and local validation, the owner performs manual UAT.
+Acceptance such as “pass”, “ผ่าน”, or “ปิดงานได้” authorizes commit/push/PR,
+CI-gated merge into develop, verified cleanup, and Issue/roadmap synchronization
+without further approval. Browser/computer use is reserved for genuine necessity
+or an explicit request. Production promotion, deployment, and production
+migration still require separate approval.

@@ -55,24 +55,31 @@ export async function registerAuthRoutes(
         })
       }
 
-      const [user] = await database
-        .select({
-          id: users.id,
-          isActive: users.isActive,
-          passwordHash: users.passwordHash,
-          role: users.role,
-          username: users.username,
-        })
-        .from(users)
-        .where(eq(users.username, parsed.data.username))
-        .limit(1)
-
-      const passwordMatches = await argon2.verify(
-        user?.passwordHash ?? dummyPasswordHash,
-        parsed.data.password,
-      )
-
-      if (!user || !user.isActive || !passwordMatches) {
+      // Serialize login with password changes so an old password cannot create
+      // a session after the password-change transaction revokes existing ones.
+      const authenticated = await database.transaction(async (transaction) => {
+        const [user] = await transaction
+          .select({
+            id: users.id,
+            isActive: users.isActive,
+            passwordHash: users.passwordHash,
+            role: users.role,
+            username: users.username,
+          })
+          .from(users)
+          .where(eq(users.username, parsed.data.username))
+          .limit(1)
+          .for('update')
+        const passwordMatches = await argon2.verify(
+          user?.passwordHash ?? dummyPasswordHash,
+          parsed.data.password,
+        )
+        if (!user || !user.isActive || !passwordMatches) return null
+        const session = createSessionRecord(user.id, parsed.data.rememberMe)
+        await transaction.insert(sessions).values(session.record)
+        return { user, session }
+      })
+      if (!authenticated) {
         return reply.status(401).send({
           error: {
             code: 'INVALID_CREDENTIALS',
@@ -80,9 +87,7 @@ export async function registerAuthRoutes(
           },
         })
       }
-
-      const session = createSessionRecord(user.id, parsed.data.rememberMe)
-      await database.insert(sessions).values(session.record)
+      const { user, session } = authenticated
       reply.setCookie(cookieName, session.token, {
         httpOnly: true,
         maxAge: session.cookieMaxAgeSeconds,

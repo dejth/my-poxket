@@ -20,6 +20,10 @@ import {
   users,
 } from '../database/schema.js'
 import { getDashboardSummary, todayInBangkok } from './service.js'
+import {
+  initializeStarterCategories,
+  starterCategories,
+} from './starter-categories.js'
 
 const databaseUrl = process.env.TEST_DATABASE_URL
 const describeWithDatabase = databaseUrl ? describe : describe.skip
@@ -55,6 +59,7 @@ describeWithDatabase('finance API with MariaDB', () => {
     await database.delete(users).where(eq(users.username, username))
     await database.insert(users).values({
       id: userId,
+      name: 'Fictional Owner',
       isActive: true,
       passwordHash: await argon2.hash(password, { type: argon2.argon2id }),
       role: 'owner',
@@ -97,6 +102,66 @@ describeWithDatabase('finance API with MariaDB', () => {
     await database.delete(categories)
     await database.delete(users).where(eq(users.id, userId))
     await connection.end()
+  })
+
+  it('initializes starter categories concurrently without changing customizations or history', async () => {
+    const existing = await createCategory('income', 'เงินเดือน')
+    await createTransaction(existing.id, {
+      amount: '100',
+      description: 'รายรับสมมติ',
+      direction: 'income',
+      paymentMethod: 'cash',
+      transactionDate: '2026-09-01',
+    })
+    await database
+      .update(categories)
+      .set({ isActive: false })
+      .where(eq(categories.id, existing.id))
+    const historyBefore = await database.select().from(transactions)
+    const [existingBefore] = await database
+      .select()
+      .from(categories)
+      .where(eq(categories.id, existing.id))
+
+    await Promise.all([
+      initializeStarterCategories(database),
+      initializeStarterCategories(database),
+    ])
+    expect(await database.select().from(categories)).toHaveLength(
+      starterCategories.length,
+    )
+    expect(
+      await database
+        .select()
+        .from(categories)
+        .where(eq(categories.id, existing.id)),
+    ).toEqual([existingBefore])
+
+    const renamedId = starterCategories[1].id
+    await database
+      .update(categories)
+      .set({
+        name: 'โบนัสที่ปรับเอง',
+        normalizedName: 'โบนัสที่ปรับเอง',
+        isActive: false,
+      })
+      .where(eq(categories.id, renamedId))
+    const beforeRerun = await database.select().from(categories)
+    await initializeStarterCategories(database)
+    expect(await database.select().from(categories)).toEqual(beforeRerun)
+    expect(await database.select().from(transactions)).toEqual(historyBefore)
+
+    const response = await app.inject({
+      headers: { cookie },
+      method: 'GET',
+      url: '/api/categories',
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json<{ items: { name: string }[] }>().items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'อาหารและเครื่องดื่ม' }),
+      ]),
+    )
   })
 
   it('blocks unauthenticated and non-CSRF mutations', async () => {

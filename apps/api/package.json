@@ -9,12 +9,13 @@
   "scripts": {
     "auth:bootstrap": "tsx src/commands/bootstrap-owner.ts",
     "build": "tsc -p tsconfig.build.json",
+    "categories:init": "tsx src/commands/initialize-categories.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/commands/migrate.ts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "test:integration": "vitest run src/finance/routes.integration.test.ts",
+    "test:integration": "vitest run src/finance/routes.integration.test.ts src/users/routes.integration.test.ts --no-file-parallelism",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

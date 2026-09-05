@@ -39,6 +39,7 @@ try {
   await database.transaction(async (transaction) => {
     await transaction.insert(users).values({
       id: randomUUID(),
+      name: bootstrapUsername,
       isActive: true,
       passwordHash,
       role: 'owner',

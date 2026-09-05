@@ -7,7 +7,7 @@
   --color-canvas: #f3f5f2;
   --color-surface: #ffffff;
   --color-ink: #17241f;
-  --color-muted: #6b7771;
+  --color-muted: #58665e;
   --color-border: #d8dfda;
   --color-accent: #176c55;
   --color-accent-strong: #105440;
@@ -15,6 +15,35 @@
   --radius-sm: 0.875rem;
   --radius-lg: 1.75rem;
   --shadow-card: 0 24px 70px rgb(23 36 31 / 8%);
+}
+
+.mobile-users-link {
+  display: none;
+}
+.users-layout input {
+  min-width: 0;
+}
+.users-layout {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1150px) {
+  .category-layout.users-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 860px) {
+  .mobile-users-link {
+    display: block;
+    padding: 0 1.25rem 1rem;
+  }
+  .mobile-users-link a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .users-layout input {
+    font-size: 1rem;
+  }
 }
 
 * {
@@ -34,6 +63,10 @@ select {
   font: inherit;
 }
 
+button {
+  min-width: 2.75rem;
+}
+
 button,
 input[type='checkbox'] {
   cursor: pointer;
@@ -42,8 +75,9 @@ input[type='checkbox'] {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
-a:focus-visible {
-  outline: 3px solid rgb(23 108 85 / 24%);
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -301,7 +335,7 @@ a:focus-visible {
 }
 
 .dashboard-period input {
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   padding: 0;
   border: 0;
   color: var(--color-ink);
@@ -1138,8 +1172,9 @@ a:focus-visible {
 }
 
 .action-notice button {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1285,7 +1320,7 @@ a:focus-visible {
 }
 
 .row-actions .text-button {
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   font-size: 0.82rem;
 }
 
@@ -1304,13 +1339,20 @@ a:focus-visible {
   font-size: 0.82rem;
 }
 
-.dialog-backdrop {
+.modal-frame[open] {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  color: var(--color-ink);
   z-index: 50;
   display: grid;
   padding: 1rem;
-  background: rgb(14 24 20 / 52%);
+  background: transparent;
   place-items: center;
 }
 
@@ -1349,6 +1391,7 @@ a:focus-visible {
 }
 
 .transaction-form .segmented-field,
+.transaction-form > .dialog-heading,
 .transaction-form .form-error,
 .dialog-actions {
   grid-column: 1 / -1;
@@ -1611,7 +1654,7 @@ a:focus-visible {
     grid-column: auto;
   }
 
-  .dialog-backdrop {
+  .modal-frame[open] {
     padding: 0;
     place-items: stretch;
   }
@@ -1649,7 +1692,7 @@ a:focus-visible {
     width: 100%;
   }
 
-  .payment-dialog-backdrop {
+  .modal-frame.payment-dialog-backdrop[open] {
     place-items: end stretch;
   }
 
@@ -1713,5 +1756,100 @@ a:focus-visible {
   .primary-button:active:not(:disabled),
   .secondary-button:active:not(:disabled) {
     transform: translateY(1px);
+  }
+}
+
+/* Native dialogs keep background controls inert and contain keyboard focus. */
+.modal-frame::backdrop {
+  background: rgb(14 24 20 / 52%);
+}
+
+.modal-frame > .transaction-form {
+  margin-top: 0;
+}
+
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+
+.segmented-field label:has(input:focus-visible) {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.field,
+.field input,
+.field select,
+.filter-bar label,
+.transaction-card-main > *,
+.installment-summary > *,
+.statement-dates > * {
+  min-width: 0;
+}
+
+.page-shell {
+  overflow-wrap: anywhere;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 90;
+  padding: 0.75rem 1rem;
+  color: var(--color-accent-strong);
+  background: var(--color-surface);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.query-error {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+}
+
+.query-error p {
+  margin: 0;
+}
+
+@media (min-width: 861px) and (max-width: 1150px) {
+  .category-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .transaction-card-main,
+  .transaction-card-meta,
+  .installment-plan-heading,
+  .payment-dialog-heading {
+    flex-wrap: wrap;
+  }
+  .statement-dates,
+  .card-rule-grid {
+    grid-template-columns: 1fr;
+  }
+  .pagination-row {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .field input,
+  .field select,
+  .filter-bar input,
+  .filter-bar select {
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }

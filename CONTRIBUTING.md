@@ -17,7 +17,7 @@ Use fictional data only. Never add real financial details, `.env` files,
 database dumps, production backups, credentials, private keys, deployment
 coordinates, production screenshots, personal logs, or sensitive source maps.
 
-Before proposing a commit or push:
+Before committing or pushing accepted work:
 
 ```bash
 git status --short
@@ -45,9 +45,15 @@ history, then run the repository's approved secret scanner when configured.
 
 The long-lived branch flow is `main` → `release` → `develop`. Start each
 implementation from `develop` on a focused `tasks/<issue>-<slug>` branch and
-open its pull request back into `develop`. After CI and the approved review
-checkpoint pass, merge the pull request and delete the verified merged task
-branch.
+provide a concise manual owner UAT checklist after implementation and local
+validation. Use browser/computer control only when genuinely necessary or
+explicitly requested.
+
+Owner acceptance such as “pass”, “ผ่าน”, or “ปิดงานได้” authorizes commit, push,
+PR creation into `develop`, merge after required CI/reviews pass, verified branch
+cleanup, local develop synchronization, and related Issue/roadmap updates without
+requesting approval again. Never bypass protections; stop on conflicts and
+preserve unrelated work.
 
 Promoting `develop` into `release`, or `release` into `main`, remains a separate
 release checkpoint. Do not push feature work directly to any long-lived branch.

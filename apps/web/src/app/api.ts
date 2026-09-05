@@ -12,6 +12,36 @@ export interface LoginInput {
   readonly username: string
 }
 
+export interface UserData {
+  readonly id: string
+  readonly name: string
+  readonly username: string
+}
+
+export interface UserInput {
+  readonly name: string
+  readonly username: string
+  readonly password?: string
+}
+
+export async function getUsers(): Promise<readonly UserData[]> {
+  const response = await fetch('/api/users', { credentials: 'include' })
+  return (await readJsonResponse<{ items: UserData[] }>(response)).items
+}
+
+export function saveUser(
+  csrfToken: string,
+  input: UserInput,
+  id?: string,
+): Promise<UserData & { requiresLogin?: boolean }> {
+  return mutateJson(
+    id ? `/api/users/${id}` : '/api/users',
+    csrfToken,
+    input,
+    id ? 'PATCH' : 'POST',
+  )
+}
+
 export type Direction = 'income' | 'expense'
 export type PaymentMethod =
   'cash' | 'bank_transfer' | 'debit_card' | 'other' | 'credit_card'

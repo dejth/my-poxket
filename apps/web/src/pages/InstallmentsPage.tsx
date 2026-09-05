@@ -1,10 +1,12 @@
+import { QueryError } from '../app/QueryError'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { calculateInstallmentEndDate } from '@my-poxket/domain/calendar'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
+import { Modal } from '../app/Modal'
 import { ActionNotice } from '../app/ActionNotice'
 import {
   cancelInstallmentPlan,
@@ -75,7 +77,6 @@ export function InstallmentsPage() {
   const { session } = useAuthenticatedContext()
   const queryClient = useQueryClient()
   const idempotencyKey = useRef(crypto.randomUUID())
-  const createCloseButtonRef = useRef<HTMLButtonElement>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [planPage, setPlanPage] = useState(1)
@@ -211,18 +212,6 @@ export function InstallmentsPage() {
     },
   })
 
-  useEffect(() => {
-    if (!isCreateOpen) return
-    createCloseButtonRef.current?.focus()
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !createMutation.isPending) {
-        setIsCreateOpen(false)
-      }
-    }
-    document.addEventListener('keydown', closeOnEscape)
-    return () => document.removeEventListener('keydown', closeOnEscape)
-  }, [createMutation.isPending, isCreateOpen])
-
   const expenseCategories =
     categoriesQuery.data?.filter(
       ({ direction, isActive }) => direction === 'expense' && isActive,
@@ -276,17 +265,20 @@ export function InstallmentsPage() {
 
       <section className="installment-layout">
         {isCreateOpen ? (
-          <div className="dialog-backdrop" role="presentation">
+          <Modal
+            labelledBy="installment-form-title"
+            onClose={() => {
+              if (!createMutation.isPending) setIsCreateOpen(false)
+            }}
+          >
             <form
               aria-labelledby="installment-form-title"
-              aria-modal="true"
               className="form-dialog installment-plan-form"
               onSubmit={(event) => {
                 void form.handleSubmit((values) =>
                   createMutation.mutate(values),
                 )(event)
               }}
-              role="dialog"
             >
               <div className="dialog-heading">
                 <div>
@@ -298,7 +290,7 @@ export function InstallmentsPage() {
                   className="icon-button"
                   disabled={createMutation.isPending}
                   onClick={() => setIsCreateOpen(false)}
-                  ref={createCloseButtonRef}
+
                   type="button"
                 >
                   ×
@@ -308,10 +300,17 @@ export function InstallmentsPage() {
               <label className="field">
                 ชื่อแผน
                 <input
+                  aria-invalid={Boolean(form.formState.errors.description)}
+                  aria-describedby={
+                    form.formState.errors.description
+                      ? 'InstallmentsPage-description-error'
+                      : undefined
+                  }
                   placeholder="เช่น โน้ตบุ๊กตัวอย่าง"
                   {...form.register('description')}
                 />
                 <FieldError
+                  id="InstallmentsPage-description-error"
                   message={form.formState.errors.description?.message}
                 />
               </label>
@@ -321,7 +320,12 @@ export function InstallmentsPage() {
                   ยอดรวม (บาท, ไม่บังคับ)
                 </label>
                 <input
-                  aria-describedby="installment-total-amount-hint"
+                  aria-invalid={Boolean(form.formState.errors.totalAmount)}
+                  aria-describedby={
+                    form.formState.errors.totalAmount
+                      ? 'installment-total-amount-hint installment-total-amount-error'
+                      : 'installment-total-amount-hint'
+                  }
                   autoComplete="off"
                   id="installment-total-amount"
                   inputMode="decimal"
@@ -329,6 +333,7 @@ export function InstallmentsPage() {
                   {...form.register('totalAmount')}
                 />
                 <FieldError
+                  id="installment-total-amount-error"
                   message={form.formState.errors.totalAmount?.message}
                 />
                 <small
@@ -342,12 +347,21 @@ export function InstallmentsPage() {
               <label className="field">
                 ยอดจ่ายต่องวด (บาท)
                 <input
+                  aria-invalid={Boolean(
+                    form.formState.errors.installmentAmount,
+                  )}
+                  aria-describedby={
+                    form.formState.errors.installmentAmount
+                      ? 'InstallmentsPage-installmentAmount-error'
+                      : undefined
+                  }
                   autoComplete="off"
                   inputMode="decimal"
                   placeholder="เช่น 1250.75"
                   {...form.register('installmentAmount')}
                 />
                 <FieldError
+                  id="InstallmentsPage-installmentAmount-error"
                   message={form.formState.errors.installmentAmount?.message}
                 />
               </label>
@@ -356,6 +370,14 @@ export function InstallmentsPage() {
                 <label className="field">
                   จำนวนงวด
                   <input
+                    aria-invalid={Boolean(
+                      form.formState.errors.totalInstallments,
+                    )}
+                    aria-describedby={
+                      form.formState.errors.totalInstallments
+                        ? 'InstallmentsPage-totalInstallments-error'
+                        : undefined
+                    }
                     inputMode="numeric"
                     min={1}
                     type="number"
@@ -364,13 +386,26 @@ export function InstallmentsPage() {
                     })}
                   />
                   <FieldError
+                    id="InstallmentsPage-totalInstallments-error"
                     message={form.formState.errors.totalInstallments?.message}
                   />
                 </label>
                 <label className="field">
                   วันที่งวดแรก
-                  <input type="date" {...form.register('firstPaymentDate')} />
+                  <input
+                    aria-invalid={Boolean(
+                      form.formState.errors.firstPaymentDate,
+                    )}
+                    aria-describedby={
+                      form.formState.errors.firstPaymentDate
+                        ? 'InstallmentsPage-firstPaymentDate-error'
+                        : undefined
+                    }
+                    type="date"
+                    {...form.register('firstPaymentDate')}
+                  />
                   <FieldError
+                    id="InstallmentsPage-firstPaymentDate-error"
                     message={form.formState.errors.firstPaymentDate?.message}
                   />
                 </label>
@@ -387,7 +422,15 @@ export function InstallmentsPage() {
 
               <label className="field">
                 หมวดรายจ่าย
-                <select {...form.register('categoryId')}>
+                <select
+                  aria-invalid={Boolean(form.formState.errors.categoryId)}
+                  aria-describedby={
+                    form.formState.errors.categoryId
+                      ? 'InstallmentsPage-categoryId-error'
+                      : undefined
+                  }
+                  {...form.register('categoryId')}
+                >
                   <option value="">เลือกหมวดหมู่</option>
                   {expenseCategories.map((category) => (
                     <option key={category.id} value={category.id}>
@@ -396,6 +439,7 @@ export function InstallmentsPage() {
                   ))}
                 </select>
                 <FieldError
+                  id="InstallmentsPage-categoryId-error"
                   message={form.formState.errors.categoryId?.message}
                 />
               </label>
@@ -414,7 +458,15 @@ export function InstallmentsPage() {
               {paymentMethod === 'credit_card' ? (
                 <label className="field">
                   บัตรเครดิต
-                  <select {...form.register('creditCardId')}>
+                  <select
+                    aria-invalid={Boolean(form.formState.errors.creditCardId)}
+                    aria-describedby={
+                      form.formState.errors.creditCardId
+                        ? 'InstallmentsPage-creditCardId-error'
+                        : undefined
+                    }
+                    {...form.register('creditCardId')}
+                  >
                     <option value="">เลือกบัตรเครดิต</option>
                     {activeCards.map((card) => (
                       <option key={card.id} value={card.id}>
@@ -423,6 +475,7 @@ export function InstallmentsPage() {
                     ))}
                   </select>
                   <FieldError
+                    id="InstallmentsPage-creditCardId-error"
                     message={form.formState.errors.creditCardId?.message}
                   />
                 </label>
@@ -442,7 +495,7 @@ export function InstallmentsPage() {
                 {createMutation.isPending ? 'กำลังสร้าง…' : 'สร้างแผนผ่อน'}
               </button>
             </form>
-          </div>
+          </Modal>
         ) : null}
 
         <section className="installment-plans" aria-label="แผนผ่อนทั้งหมด">
@@ -495,13 +548,16 @@ export function InstallmentsPage() {
             </div>
           ) : null}
           {plansQuery.isPending ? (
-            <div className="surface muted-state" aria-busy="true">
+            <div className="surface muted-state" aria-busy="true" role="status">
               กำลังโหลดแผนผ่อน…
             </div>
           ) : plansQuery.isError ? (
-            <div className="surface inline-error" role="alert">
-              {plansQuery.error.message}
-            </div>
+            <QueryError
+              message={plansQuery.error.message}
+              onRetry={() => {
+                void plansQuery.refetch()
+              }}
+            />
           ) : plans.length === 0 ? (
             <div className="surface empty-list">
               <h2>ยังไม่มีแผนผ่อน</h2>
@@ -762,22 +818,16 @@ function PaymentDialog({
   ) => void
   readonly plan: InstallmentPlanData
 }) {
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isPending) onClose()
-    }
-    document.addEventListener('keydown', closeOnEscape)
-    return () => document.removeEventListener('keydown', closeOnEscape)
-  }, [isPending, onClose])
-
   return (
-    <div
-      className="dialog-backdrop payment-dialog-backdrop"
-      role="presentation"
+    <Modal
+      labelledBy="payment-dialog-title"
+      onClose={() => {
+        if (!isPending) onClose()
+      }}
+      payment
     >
       <form
         aria-labelledby="payment-dialog-title"
-        aria-modal="true"
         className="form-dialog payment-dialog-sheet"
         onSubmit={(event) => {
           event.preventDefault()
@@ -794,7 +844,6 @@ function PaymentDialog({
             onConfirm(paidAmount, paidDate, closesPlan)
           }
         }}
-        role="dialog"
       >
         <div className="payment-dialog-heading">
           <div>
@@ -858,7 +907,7 @@ function PaymentDialog({
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
 
@@ -917,6 +966,16 @@ function formatCardName(card: {
     : card.name
 }
 
-function FieldError({ message }: { readonly message: string | undefined }) {
-  return message ? <small>{message}</small> : null
+function FieldError({
+  id,
+  message,
+}: {
+  readonly id: string
+  readonly message: string | undefined
+}) {
+  return message ? (
+    <small id={id} role="alert">
+      {message}
+    </small>
+  ) : null
 }

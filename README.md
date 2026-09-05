@@ -73,11 +73,17 @@ npm install
 docker compose up -d database
 npm run db:migrate --workspace @my-poxket/api
 npm run auth:bootstrap --workspace @my-poxket/api
+npm run categories:init --workspace @my-poxket/api
 npm run dev
 ```
 
 The development owner username/password come from the ignored `.env` file.
 They must never be copied into source, documentation, screenshots, or logs.
+
+`categories:init` adds 21 general-purpose income/expense categories and is safe
+to rerun without overwriting existing categories or financial history. It uses
+the configured API database and does not insert sample transactions. See the
+[Issue #7 UAT checklist and fictional dataset](docs/uat/issue-7.md) for details.
 
 Open `http://127.0.0.1:5173`. Vite proxies `/api` to the local Node API.
 
@@ -110,7 +116,7 @@ import, but only after confirming it contains no real or sensitive data.
 
 ## Portfolio safety
 
-There is no online demo. Portfolio screenshots, when added after development,
+There is no online demo. Portfolio screenshots are deferred until after production deployment and, when added,
 will be captured locally using fictional data and reviewed before publication.
 Production screenshots, database dumps, `.env` files, credentials, logs,
 source maps, and real financial information must never enter the repository.
@@ -123,9 +129,18 @@ Credit cards and derived statements from Issue #3 and installment tracking from
 Issue #4 are complete and passed owner UAT. Recurring expenses from Issue #5 are
 also complete and passed owner UAT. Monthly activity and upcoming payables from
 Issue #6 are complete and passed owner UAT. Roadmap Issue #9 links the remaining
-responsive-polish and production-readiness phases.
+responsive-polish and production-readiness phases. Issue #7 also adds
+general-purpose starter income/expense categories with repeatable initialization
+that preserves existing data. Issue #8 supplies deployment instructions, server
+scripts, and inspected build artifacts for the owner to deploy to Plesk, plus
+backup/rollback guidance and a post-deploy checklist.
 
 See [PROJECT.md](./PROJECT.md) for the delivery plan and recorded decisions.
+
+Issue #16 adds owner-managed accounts at `/users`: name, username, and password
+only. Accounts share the same private ledger. Apply the new forward migration
+before running this revision; existing accounts keep their credentials and use
+their username as the initial name. See [user-management UAT](docs/uat/users.md).
 
 ## License
 

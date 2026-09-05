@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getSession, login, logout } from './api'
 import type { LoginInput, SessionData } from './api'
 import { AppShell } from './AppShell'
+import { QueryError } from './QueryError'
 import { LoginPage } from '../pages/LoginPage'
 
 const SESSION_QUERY_KEY = ['session'] as const
@@ -40,7 +41,12 @@ export function App() {
         <div className="service-error">
           <p className="eyebrow">เชื่อมต่อไม่สำเร็จ</p>
           <h1>ไม่สามารถติดต่อ My Poxket API ได้</h1>
-          <p>ตรวจว่า Node API และ MariaDB ทำงานอยู่ แล้วลองโหลดหน้านี้ใหม่</p>
+          <QueryError
+            message="เชื่อมต่อไม่สำเร็จ กรุณาลองอีกครั้ง"
+            onRetry={() => {
+              void sessionQuery.refetch()
+            }}
+          />
         </div>
       </main>
     )
