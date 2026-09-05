@@ -39,9 +39,75 @@ export interface CreditCardStatementData {
   readonly cardName: string
   readonly maskedSuffix: string | null
   readonly officialDueDate: string
+  readonly paidAmountMinor: string | null
+  readonly paidDate: string | null
   readonly plannedPaymentDate: string
   readonly purchaseCount: number
   readonly statementEndDate: string
+  readonly status: 'paid' | 'unpaid'
+}
+
+export interface CreditCardStatementPaymentData {
+  readonly cardId: string
+  readonly paidAmountMinor: string | null
+  readonly paidDate: string | null
+  readonly statementEndDate: string
+  readonly status: 'paid' | 'unpaid'
+}
+
+export type DashboardSource =
+  'credit_card_statement' | 'installment' | 'recurring'
+
+export interface DashboardPayableData {
+  readonly amountMinor: string
+  readonly cardId?: string | undefined
+  readonly context: string
+  readonly dueDate: string
+  readonly id: string
+  readonly officialDueDate?: string | undefined
+  readonly source: DashboardSource
+  readonly statementEndDate?: string | undefined
+  readonly status: 'overdue' | 'unpaid'
+  readonly title: string
+}
+
+export interface DashboardHistoryData {
+  readonly amountMinor: string
+  readonly cardId?: string | undefined
+  readonly context: string
+  readonly date: string
+  readonly dueDate: string
+  readonly id: string
+  readonly source: DashboardSource
+  readonly statementEndDate?: string | undefined
+  readonly status: 'cancelled' | 'paid'
+  readonly title: string
+}
+
+export interface DashboardSummaryData {
+  readonly activity: {
+    readonly categories: readonly {
+      readonly amountMinor: string
+      readonly categoryId: string
+      readonly categoryName: string
+      readonly direction: Direction
+    }[]
+    readonly expenseMinor: string
+    readonly incomeMinor: string
+    readonly netMinor: string
+  }
+  readonly cashFlow: {
+    readonly inflowMinor: string
+    readonly netMinor: string
+    readonly outflowMinor: string
+  }
+  readonly history: readonly DashboardHistoryData[]
+  readonly payables: readonly DashboardPayableData[]
+  readonly period: string
+  readonly periodEnd: string
+  readonly periodStart: string
+  readonly throughDate: string
+  readonly today: string
 }
 
 export type InstallmentPlanStatus =
@@ -291,6 +357,43 @@ export async function getCreditCardStatements(filters: {
     response,
   )
   return body.items
+}
+
+export async function getDashboardSummary(
+  csrfToken: string,
+  period: string,
+): Promise<DashboardSummaryData> {
+  await mutateJson(
+    '/api/recurring-expenses/materialize',
+    csrfToken,
+    undefined,
+    'POST',
+  )
+  const response = await fetch(
+    `/api/dashboard-summary?${new URLSearchParams({ period })}`,
+    { credentials: 'include' },
+  )
+  return readJsonResponse(response)
+}
+
+export function setCreditCardStatementPayment(
+  csrfToken: string,
+  cardId: string,
+  statementEndDate: string,
+  input:
+    | {
+        readonly paidAmount: string
+        readonly paidDate: string
+        readonly status: 'paid'
+      }
+    | { readonly status: 'unpaid' },
+): Promise<CreditCardStatementPaymentData> {
+  return mutateJson(
+    `/api/credit-card-statements/${cardId}/${statementEndDate}/payment`,
+    csrfToken,
+    input,
+    'PATCH',
+  )
 }
 
 export async function getTransactions(

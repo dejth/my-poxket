@@ -21,6 +21,7 @@ import type { Database } from '../database/client.js'
 import {
   categories,
   creditCards,
+  creditCardStatementPayments,
   installmentOccurrences,
   installmentPlans,
   recurringExpenseOccurrences,
@@ -273,22 +274,26 @@ export async function listCreditCardStatements(
   database: Database,
   filters: {
     readonly cardId?: string | undefined
-    readonly dateFrom: string
+    readonly dateFrom?: string | undefined
     readonly dateTo: string
   },
 ) {
   const conditions: SQL[] = [
     eq(transactions.paymentMethod, 'credit_card'),
     eq(transactions.status, 'active'),
-    gte(
-      transactions.transactionDate,
-      addCalendarMonthsClamped(`${filters.dateFrom.slice(0, 7)}-01`, -1),
-    ),
     lte(transactions.transactionDate, filters.dateTo),
   ]
+  if (filters.dateFrom) {
+    conditions.push(
+      gte(
+        transactions.transactionDate,
+        addCalendarMonthsClamped(`${filters.dateFrom.slice(0, 7)}-01`, -1),
+      ),
+    )
+  }
   if (filters.cardId) conditions.push(eq(creditCards.id, filters.cardId))
 
-  const rows = await database
+  const query = database
     .select({
       amountMinor: transactions.amountMinor,
       cardId: creditCards.id,
@@ -301,9 +306,9 @@ export async function listCreditCardStatements(
     .from(transactions)
     .innerJoin(creditCards, eq(creditCards.id, transactions.creditCardId))
     .where(and(...conditions))
-    .limit(5001)
+  const rows = filters.dateFrom ? await query.limit(5001) : await query
 
-  if (rows.length > 5000) {
+  if (filters.dateFrom && rows.length > 5000) {
     throw new FinanceError(
       'STATEMENT_RANGE_TOO_LARGE',
       'ช่วงข้อมูลกว้างเกินไป กรุณาระบุช่วงวันที่ให้แคบลง',
@@ -329,7 +334,7 @@ export async function listCreditCardStatements(
       row.cutoffDay,
     )
     if (
-      statementEndDate < filters.dateFrom ||
+      (filters.dateFrom && statementEndDate < filters.dateFrom) ||
       statementEndDate > filters.dateTo
     ) {
       continue
@@ -353,7 +358,7 @@ export async function listCreditCardStatements(
     }
   }
 
-  return [...grouped.values()]
+  const statements = [...grouped.values()]
     .map(({ dueDay, ...statement }) => {
       const officialDueDate = calculateCardDueDate(
         statement.statementEndDate,
@@ -374,6 +379,467 @@ export async function listCreditCardStatements(
         right.statementEndDate.localeCompare(left.statementEndDate) ||
         left.cardName.localeCompare(right.cardName, 'th'),
     )
+
+  const paymentRows = await database
+    .select({
+      creditCardId: creditCardStatementPayments.creditCardId,
+      paidAmountMinor: creditCardStatementPayments.paidAmountMinor,
+      paidDate: creditCardStatementPayments.paidDate,
+      statementEndDate: creditCardStatementPayments.statementEndDate,
+      status: creditCardStatementPayments.status,
+    })
+    .from(creditCardStatementPayments)
+  const payments = new Map(
+    paymentRows.map((payment) => [
+      `${payment.creditCardId}:${payment.statementEndDate}`,
+      payment,
+    ]),
+  )
+
+  return statements.map((statement) => {
+    const payment = payments.get(
+      `${statement.cardId}:${statement.statementEndDate}`,
+    )
+    return {
+      ...statement,
+      paidAmountMinor: payment?.paidAmountMinor?.toString() ?? null,
+      paidDate: payment?.paidDate ?? null,
+      status: payment?.status ?? ('unpaid' as const),
+    }
+  })
+}
+
+export async function setCreditCardStatementPayment(
+  database: Database,
+  cardId: string,
+  statementEndDate: string,
+  input:
+    | {
+        readonly paidAmount: string
+        readonly paidDate: string
+        readonly status: 'paid'
+      }
+    | { readonly status: 'unpaid' },
+) {
+  const [card] = await database
+    .select({ id: creditCards.id })
+    .from(creditCards)
+    .where(eq(creditCards.id, cardId))
+    .limit(1)
+  if (!card) {
+    throw new FinanceError('CREDIT_CARD_NOT_FOUND', 'ไม่พบบัตรเครดิต', 404)
+  }
+
+  const [existing] = await database
+    .select({
+      id: creditCardStatementPayments.id,
+      status: creditCardStatementPayments.status,
+    })
+    .from(creditCardStatementPayments)
+    .where(
+      and(
+        eq(creditCardStatementPayments.creditCardId, cardId),
+        eq(creditCardStatementPayments.statementEndDate, statementEndDate),
+      ),
+    )
+    .limit(1)
+  if (input.status === 'unpaid' && existing?.status !== 'paid') {
+    throw new FinanceError(
+      'CREDIT_CARD_STATEMENT_NOT_PAID',
+      'รอบบัญชีนี้ยังไม่ได้บันทึกว่าจ่ายแล้ว',
+      409,
+    )
+  }
+
+  if (input.status === 'paid') {
+    const [statement] = await listCreditCardStatements(database, {
+      cardId,
+      dateFrom: statementEndDate,
+      dateTo: statementEndDate,
+    })
+    if (!statement) {
+      throw new FinanceError(
+        'CREDIT_CARD_STATEMENT_NOT_FOUND',
+        'ไม่พบรอบบัญชีที่ระบุ',
+        404,
+      )
+    }
+  }
+
+  const values = {
+    paidAmountMinor:
+      input.status === 'paid' ? parseAmount(input.paidAmount) : null,
+    paidDate: input.status === 'paid' ? input.paidDate : null,
+    status: input.status,
+  } as const
+  if (input.status === 'paid') {
+    await database
+      .insert(creditCardStatementPayments)
+      .values({
+        ...values,
+        creditCardId: cardId,
+        id: randomUUID(),
+        statementEndDate,
+      })
+      .onDuplicateKeyUpdate({ set: values })
+  } else if (existing) {
+    await database
+      .update(creditCardStatementPayments)
+      .set(values)
+      .where(eq(creditCardStatementPayments.id, existing.id))
+  }
+
+  return {
+    cardId,
+    paidAmountMinor: values.paidAmountMinor?.toString() ?? null,
+    paidDate: values.paidDate,
+    statementEndDate,
+    status: values.status,
+  }
+}
+
+export async function getDashboardSummary(
+  database: Database,
+  period: string,
+  today = todayInBangkok(),
+) {
+  const periodStart = `${period}-01`
+  const periodEnd = recurringDateForPeriod(period, 31)
+  const throughDate = recurringDateForPeriod(nextMonthPeriod(today), 31)
+
+  const [activityRows, statements, plans, rules, statementPayments] =
+    await Promise.all([
+      database
+        .select({
+          amountMinor: transactions.amountMinor,
+          categoryId: categories.id,
+          categoryName: categories.name,
+          direction: transactions.direction,
+          paymentMethod: transactions.paymentMethod,
+        })
+        .from(transactions)
+        .innerJoin(categories, eq(categories.id, transactions.categoryId))
+        .where(
+          and(
+            eq(transactions.status, 'active'),
+            gte(transactions.transactionDate, periodStart),
+            lte(transactions.transactionDate, periodEnd),
+          ),
+        ),
+      listCreditCardStatements(database, { dateTo: throughDate }),
+      listInstallmentPlans(database),
+      listRecurringExpenseRules(database),
+      database
+        .select({
+          cardId: creditCardStatementPayments.creditCardId,
+          cardName: creditCards.name,
+          dueDay: creditCards.dueDay,
+          maskedSuffix: creditCards.maskedSuffix,
+          paidAmountMinor: creditCardStatementPayments.paidAmountMinor,
+          paidDate: creditCardStatementPayments.paidDate,
+          statementEndDate: creditCardStatementPayments.statementEndDate,
+          status: creditCardStatementPayments.status,
+        })
+        .from(creditCardStatementPayments)
+        .innerJoin(
+          creditCards,
+          eq(creditCards.id, creditCardStatementPayments.creditCardId),
+        ),
+    ])
+
+  let incomeMinor = 0n
+  let expenseMinor = 0n
+  let transactionCashOutMinor = 0n
+  const categoryTotals = new Map<
+    string,
+    {
+      amountMinor: bigint
+      categoryId: string
+      categoryName: string
+      direction: Direction
+    }
+  >()
+  for (const row of activityRows) {
+    if (row.direction === 'income') incomeMinor += row.amountMinor
+    else expenseMinor += row.amountMinor
+    if (row.direction === 'expense' && row.paymentMethod !== 'credit_card') {
+      transactionCashOutMinor += row.amountMinor
+    }
+    const key = `${row.direction}:${row.categoryId}`
+    const current = categoryTotals.get(key)
+    if (current) current.amountMinor += row.amountMinor
+    else {
+      categoryTotals.set(key, {
+        amountMinor: row.amountMinor,
+        categoryId: row.categoryId,
+        categoryName: row.categoryName,
+        direction: row.direction,
+      })
+    }
+  }
+
+  const history: DashboardHistoryItem[] = []
+  let payablePaymentsMinor = 0n
+  for (const payment of statementPayments) {
+    if (
+      payment.status !== 'paid' ||
+      !payment.paidDate ||
+      payment.paidAmountMinor === null ||
+      payment.paidDate < periodStart ||
+      payment.paidDate > periodEnd
+    ) {
+      continue
+    }
+    payablePaymentsMinor += payment.paidAmountMinor
+    const officialDueDate = calculateCardDueDate(
+      payment.statementEndDate,
+      payment.dueDay,
+    )
+    history.push({
+      amountMinor: payment.paidAmountMinor.toString(),
+      cardId: payment.cardId,
+      context: `รอบบัญชี ${payment.statementEndDate}`,
+      date: payment.paidDate,
+      id: `card:${payment.cardId}:${payment.statementEndDate}`,
+      source: 'credit_card_statement',
+      statementEndDate: payment.statementEndDate,
+      status: 'paid',
+      title: formatCardDisplayName(payment.cardName, payment.maskedSuffix),
+      dueDate: calculatePlannedCardPaymentDate(
+        payment.statementEndDate,
+        officialDueDate,
+      ),
+    })
+  }
+
+  for (const plan of plans) {
+    for (const occurrence of plan.occurrences) {
+      if (
+        occurrence.status === 'paid' &&
+        occurrence.paidDate &&
+        occurrence.paidAmountMinor &&
+        occurrence.paidDate >= periodStart &&
+        occurrence.paidDate <= periodEnd
+      ) {
+        payablePaymentsMinor += BigInt(occurrence.paidAmountMinor)
+        history.push({
+          amountMinor: occurrence.paidAmountMinor,
+          context: `ผ่อน ${occurrence.installmentNumber}/${plan.totalInstallments} · ${formatPlanStatus(plan.status)}`,
+          date: occurrence.paidDate,
+          dueDate: occurrence.dueDate,
+          id: `installment:${occurrence.id}`,
+          source: 'installment',
+          status: 'paid',
+          title: plan.description,
+        })
+      } else if (
+        occurrence.status === 'cancelled' &&
+        occurrence.dueDate >= periodStart &&
+        occurrence.dueDate <= periodEnd
+      ) {
+        history.push({
+          amountMinor: occurrence.amountMinor,
+          context: `ผ่อน ${occurrence.installmentNumber}/${plan.totalInstallments} · ${formatPlanStatus(plan.status)}`,
+          date: occurrence.dueDate,
+          dueDate: occurrence.dueDate,
+          id: `installment:${occurrence.id}`,
+          source: 'installment',
+          status: 'cancelled',
+          title: plan.description,
+        })
+      }
+    }
+  }
+
+  for (const rule of rules) {
+    for (const occurrence of rule.occurrences) {
+      if (
+        occurrence.status === 'paid' &&
+        occurrence.paidDate &&
+        occurrence.paidAmountMinor &&
+        occurrence.paidDate >= periodStart &&
+        occurrence.paidDate <= periodEnd
+      ) {
+        payablePaymentsMinor += BigInt(occurrence.paidAmountMinor)
+        history.push({
+          amountMinor: occurrence.paidAmountMinor,
+          context: `ประจำ ${occurrence.recurrencePeriod}`,
+          date: occurrence.paidDate,
+          dueDate: occurrence.dueDate,
+          id: `recurring:${occurrence.id}`,
+          source: 'recurring',
+          status: 'paid',
+          title: occurrence.description,
+        })
+      } else if (
+        occurrence.status === 'cancelled' &&
+        occurrence.dueDate >= periodStart &&
+        occurrence.dueDate <= periodEnd
+      ) {
+        history.push({
+          amountMinor: occurrence.amountMinor,
+          context: `ประจำ ${occurrence.recurrencePeriod}`,
+          date: occurrence.dueDate,
+          dueDate: occurrence.dueDate,
+          id: `recurring:${occurrence.id}`,
+          source: 'recurring',
+          status: 'cancelled',
+          title: occurrence.description,
+        })
+      }
+    }
+  }
+
+  const payables: DashboardPayableItem[] = [
+    ...statements
+      .filter(
+        (statement) =>
+          statement.status === 'unpaid' &&
+          statement.plannedPaymentDate <= throughDate,
+      )
+      .map((statement) => ({
+        amountMinor: statement.amountMinor,
+        cardId: statement.cardId,
+        context: `รอบบัญชี ${statement.statementEndDate}`,
+        dueDate: statement.plannedPaymentDate,
+        id: `card:${statement.cardId}:${statement.statementEndDate}`,
+        officialDueDate: statement.officialDueDate,
+        source: 'credit_card_statement' as const,
+        statementEndDate: statement.statementEndDate,
+        status:
+          statement.officialDueDate < today
+            ? ('overdue' as const)
+            : ('unpaid' as const),
+        title: formatCardDisplayName(
+          statement.cardName,
+          statement.maskedSuffix,
+        ),
+      })),
+    ...plans.flatMap((plan) =>
+      plan.occurrences
+        .filter(
+          (occurrence) =>
+            occurrence.status === 'unpaid' && occurrence.dueDate <= throughDate,
+        )
+        .map((occurrence) => ({
+          amountMinor: occurrence.amountMinor,
+          context: `ผ่อน ${occurrence.installmentNumber}/${plan.totalInstallments}`,
+          dueDate: occurrence.dueDate,
+          id: `installment:${occurrence.id}`,
+          source: 'installment' as const,
+          status:
+            occurrence.dueDate < today
+              ? ('overdue' as const)
+              : ('unpaid' as const),
+          title: plan.description,
+        })),
+    ),
+    ...rules.flatMap((rule) =>
+      rule.occurrences
+        .filter(
+          (occurrence) =>
+            occurrence.status === 'unpaid' && occurrence.dueDate <= throughDate,
+        )
+        .map((occurrence) => ({
+          amountMinor: occurrence.amountMinor,
+          context: `ประจำ ${occurrence.recurrencePeriod}`,
+          dueDate: occurrence.dueDate,
+          id: `recurring:${occurrence.id}`,
+          source: 'recurring' as const,
+          status:
+            occurrence.dueDate < today
+              ? ('overdue' as const)
+              : ('unpaid' as const),
+          title: occurrence.description,
+        })),
+    ),
+  ].toSorted(
+    (left, right) =>
+      left.dueDate.localeCompare(right.dueDate) ||
+      left.title.localeCompare(right.title, 'th'),
+  )
+
+  const cashOutMinor = transactionCashOutMinor + payablePaymentsMinor
+  return {
+    activity: {
+      categories: [...categoryTotals.values()]
+        .map((category) => ({
+          ...category,
+          amountMinor: category.amountMinor.toString(),
+        }))
+        .toSorted((left, right) => {
+          const directionOrder = left.direction.localeCompare(right.direction)
+          if (directionOrder !== 0) return directionOrder
+          const leftAmount = BigInt(left.amountMinor)
+          const rightAmount = BigInt(right.amountMinor)
+          if (leftAmount !== rightAmount)
+            return leftAmount > rightAmount ? -1 : 1
+          return left.categoryName.localeCompare(right.categoryName, 'th')
+        }),
+      expenseMinor: expenseMinor.toString(),
+      incomeMinor: incomeMinor.toString(),
+      netMinor: (incomeMinor - expenseMinor).toString(),
+    },
+    cashFlow: {
+      inflowMinor: incomeMinor.toString(),
+      netMinor: (incomeMinor - cashOutMinor).toString(),
+      outflowMinor: cashOutMinor.toString(),
+    },
+    history: history.toSorted(
+      (left, right) =>
+        right.date.localeCompare(left.date) ||
+        left.title.localeCompare(right.title, 'th'),
+    ),
+    payables,
+    period,
+    periodEnd,
+    periodStart,
+    throughDate,
+    today,
+  }
+}
+
+type DashboardSource = 'credit_card_statement' | 'installment' | 'recurring'
+
+interface DashboardPayableItem {
+  readonly amountMinor: string
+  readonly cardId?: string
+  readonly context: string
+  readonly dueDate: string
+  readonly id: string
+  readonly officialDueDate?: string
+  readonly source: DashboardSource
+  readonly statementEndDate?: string
+  readonly status: 'overdue' | 'unpaid'
+  readonly title: string
+}
+
+interface DashboardHistoryItem {
+  readonly amountMinor: string
+  readonly cardId?: string
+  readonly context: string
+  readonly date: string
+  readonly dueDate: string
+  readonly id: string
+  readonly source: DashboardSource
+  readonly statementEndDate?: string
+  readonly status: 'cancelled' | 'paid'
+  readonly title: string
+}
+
+function formatCardDisplayName(name: string, maskedSuffix: string | null) {
+  return maskedSuffix ? `${name} •••• ${maskedSuffix}` : name
+}
+
+function formatPlanStatus(
+  status: 'active' | 'cancelled' | 'completed' | 'settled',
+) {
+  return {
+    active: 'กำลังผ่อน',
+    cancelled: 'ยกเลิก',
+    completed: 'ชำระครบ',
+    settled: 'ปิดยอดก่อนกำหนด',
+  }[status]
 }
 
 export async function listInstallmentPlans(database: Database) {
@@ -1037,13 +1503,13 @@ function previousPeriod(period: string) {
   return `${Math.floor(previousMonth / 12)}-${String((previousMonth % 12) + 1).padStart(2, '0')}`
 }
 
-function todayInBangkok() {
+export function todayInBangkok(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     day: '2-digit',
     month: '2-digit',
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
-  }).formatToParts(new Date())
+  }).formatToParts(now)
   const value = Object.fromEntries(
     parts.map(({ type, value }) => [type, value]),
   )

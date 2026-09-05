@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CategoriesPage } from './CategoriesPage'
 import { CreditCardsPage } from './CreditCardsPage'
+import { DashboardPage } from './DashboardPage'
 import { formatThbMinor } from './finance-format'
 import { InstallmentsPage } from './InstallmentsPage'
 import { RecurringExpensesPage } from './RecurringExpensesPage'
@@ -90,6 +91,121 @@ describe('finance pages', () => {
 
   it('formats large THB minor units without floating-point conversion', () => {
     expect(formatThbMinor('99999999999')).toBe('฿999,999,999.99')
+    expect(formatThbMinor('-100000')).toBe('-฿1,000.00')
+  })
+
+  it('separates monthly activity, cash flow, payables, and history', async () => {
+    stubFinanceFetch({
+      categories: [],
+      summary: {
+        activity: {
+          categories: [
+            {
+              amountMinor: '30000',
+              categoryId: '11111111-1111-4111-8111-111111111111',
+              categoryName: 'อาหารสมมติ',
+              direction: 'expense',
+            },
+          ],
+          expenseMinor: '30000',
+          incomeMinor: '100000',
+          netMinor: '70000',
+        },
+        cashFlow: {
+          inflowMinor: '100000',
+          netMinor: '-100000',
+          outflowMinor: '200000',
+        },
+        history: [
+          {
+            amountMinor: '50000',
+            context: 'ผ่อน 2/2 · settled',
+            date: '2026-09-02',
+            dueDate: '2026-09-02',
+            id: 'installment:history',
+            source: 'installment',
+            status: 'paid',
+            title: 'ปิดยอดสมมติ',
+          },
+        ],
+        payables: [
+          {
+            amountMinor: '30000',
+            cardId: fictionalCard.id,
+            context: 'รอบบัญชี 2026-09-17 · ครบกำหนด 2026-10-01',
+            dueDate: '2026-09-30',
+            id: `card:${fictionalCard.id}:2026-09-17`,
+            officialDueDate: '2026-10-01',
+            source: 'credit_card_statement',
+            statementEndDate: '2026-09-17',
+            status: 'overdue',
+            title: 'บัตรตัวอย่าง •••• 1234',
+          },
+          {
+            amountMinor: '10000',
+            context: 'ผ่อน 1/10',
+            dueDate: '2026-10-05',
+            id: 'installment:future',
+            source: 'installment',
+            status: 'unpaid',
+            title: 'แผนผ่อนสมมติ',
+          },
+        ],
+        period: '2026-09',
+        periodEnd: '2026-09-30',
+        periodStart: '2026-09-01',
+        throughDate: '2026-10-31',
+        today: '2026-09-20',
+      },
+      transactions: [],
+    })
+    renderPage(<DashboardPage />)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'กิจกรรมเดือน กันยายน 2569',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('-฿1,000.00')).toBeInTheDocument()
+    expect(screen.getByText('อาหารสมมติ')).toBeInTheDocument()
+    expect(screen.getByText('เกินกำหนด')).toBeInTheDocument()
+    expect(screen.getByText('แผนผ่อนสมมติ')).toBeInTheDocument()
+    expect(screen.getByText('ปิดยอดสมมติ')).toBeInTheDocument()
+
+    const payButton = screen.getByRole('button', { name: 'บันทึกการจ่าย' })
+    fireEvent.click(payButton)
+    expect(
+      screen.getByRole('dialog', { name: 'บัตรตัวอย่าง •••• 1234' }),
+    ).toBeInTheDocument()
+    const amountInput = screen.getByLabelText('ยอดที่จ่าย (บาท)')
+    expect(amountInput).toHaveValue(300)
+    expect(amountInput).toHaveFocus()
+    fireEvent(
+      screen.getByRole('dialog', { name: 'บัตรตัวอย่าง •••• 1234' }),
+      new Event('cancel', { cancelable: true }),
+    )
+    expect(
+      screen.queryByRole('dialog', { name: 'บัตรตัวอย่าง •••• 1234' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows clear empty dashboard states', async () => {
+    stubFinanceFetch({
+      categories: [],
+      summary: emptyDashboardSummary(),
+      transactions: [],
+    })
+    renderPage(<DashboardPage />)
+
+    expect(
+      await screen.findByText('ยังไม่มีกิจกรรมในเดือนนี้'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('ไม่มียอดค้างหรือยอดที่กำลังจะถึงกำหนด'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('ยังไม่มีประวัติการจ่ายหรือยกเลิกในเดือนนี้'),
+    ).toBeInTheDocument()
   })
 
   it('shows card rules and keeps official and planned payment dates distinct', async () => {
@@ -355,6 +471,7 @@ function stubFinanceFetch({
   plans = [],
   recurring = [],
   statements = [],
+  summary,
   transactions,
 }: {
   cards?: readonly unknown[]
@@ -362,6 +479,7 @@ function stubFinanceFetch({
   plans?: readonly unknown[]
   recurring?: readonly unknown[]
   statements?: readonly unknown[]
+  summary?: unknown
   transactions: readonly unknown[]
 }) {
   vi.stubGlobal(
@@ -373,17 +491,19 @@ function stubFinanceFetch({
           : input instanceof URL
             ? input.href
             : input.url
-      const body = url.includes('/api/credit-card-statements')
-        ? { items: statements }
-        : url.includes('/api/recurring-expenses')
-          ? { items: recurring }
-          : url.includes('/api/installment-plans')
-            ? { items: plans }
-            : url.includes('/api/credit-cards')
-              ? { items: cards }
-              : url.includes('/api/categories')
-                ? { items: categories }
-                : { items: transactions, nextPage: null }
+      const body = url.includes('/api/dashboard-summary')
+        ? summary
+        : url.includes('/api/credit-card-statements')
+          ? { items: statements }
+          : url.includes('/api/recurring-expenses')
+            ? { items: recurring }
+            : url.includes('/api/installment-plans')
+              ? { items: plans }
+              : url.includes('/api/credit-cards')
+                ? { items: cards }
+                : url.includes('/api/categories')
+                  ? { items: categories }
+                  : { items: transactions, nextPage: null }
       return Promise.resolve(
         new Response(JSON.stringify(body), {
           headers: { 'content-type': 'application/json' },
@@ -392,4 +512,23 @@ function stubFinanceFetch({
       )
     }),
   )
+}
+
+function emptyDashboardSummary() {
+  return {
+    activity: {
+      categories: [],
+      expenseMinor: '0',
+      incomeMinor: '0',
+      netMinor: '0',
+    },
+    cashFlow: { inflowMinor: '0', netMinor: '0', outflowMinor: '0' },
+    history: [],
+    payables: [],
+    period: '2026-09',
+    periodEnd: '2026-09-30',
+    periodStart: '2026-09-01',
+    throughDate: '2026-10-31',
+    today: '2026-09-20',
+  }
 }
