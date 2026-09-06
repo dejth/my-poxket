@@ -5,7 +5,7 @@
 
 ## Context
 
-My Poxket needs a static CSR frontend for Plesk and a server-side API for
+My Poxket needs a portable static CSR frontend and a server-side API for
 authenticated MariaDB access. It does not have a confirmed requirement for
 SSR, React Server Components, Server Actions, or public SEO.
 
@@ -23,5 +23,14 @@ because it is an unsupported odd-numbered release line.
 - The frontend build is portable static output in `apps/web/dist`.
 - SPA fallback must exclude `/api` and static assets.
 - The API is independently deployable and owns all database access.
-- Plesk must enable an actively supported Node LTS runtime before deployment.
+- The production host must provide an actively supported Node LTS runtime before deployment.
 - Runtime-dependent Next.js features are intentionally unavailable.
+
+## Standard standalone build (Issue #8)
+
+The production build packages static CSR assets, compiled API/domain modules,
+locked runtime dependencies, and a generic CommonJS startup entry point. Fastify
+serves the static assets and API on the same origin; this adds no SSR.
+`@fastify/static` handles file serving, with an HTML navigation fallback that
+excludes API paths, assets, and private files. Provider-specific configuration
+is kept in ignored local files rather than public project documentation.

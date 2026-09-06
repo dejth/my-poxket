@@ -9,6 +9,8 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/coverage/**',
+      'artifacts/**',
+      '.local/**',
       '**/drizzle/**',
       'eslint.config.js',
     ],

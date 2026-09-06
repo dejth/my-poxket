@@ -17,15 +17,21 @@
 | Online demo           | None                                                   |
 | License               | MIT                                                    |
 
-## Runtime decision
+## Runtime and build decision
 
-Development and production target Node.js 24 LTS. The reported Plesk runtime
-Node.js 25.9.0 is not accepted because that release line is end-of-life. Before
-deployment, Plesk must make a currently supported Node LTS version available.
+Development and production target Node.js 24 LTS. MariaDB 11.8.6 is used locally.
+Production database settings, privileges, and backup/restore remain owner checks.
 
-MariaDB 11.8.6 is used locally to match the reported production series. The
-exact production server settings, privileges, backup process, and import limits
-remain deployment-time verification items.
+Issue #8 produces one provider-neutral standalone application with compiled
+API/domain code, static CSR assets served by Fastify, production dependencies,
+and `start.cjs`. `npm run build` creates `dist/standalone` and its archive;
+`npm run test:build` verifies the extracted bundle on a disposable Linux runtime
+and database. See [Build and runtime](docs/build.md).
+
+Hosting-specific UI instructions, paths, and configuration belong only in
+ignored `.local/` files. Do not include provider names or private hosting settings
+in public build scripts or documentation. Runtime environment variables are
+supplied externally; the build never copies environment files.
 
 ## Authentication
 
@@ -156,8 +162,8 @@ When deployment is ready:
 3. Export with a consistent transactional dump into an ignored artifact path.
 4. Inspect the SQL artifact for credentials, production coordinates, and real
    financial data.
-5. Establish and verify the Plesk database backup/restore path.
-6. Import through the approved Plesk MySQL/MariaDB feature.
+5. Establish and verify the hosting provider database backup/restore path.
+6. Import through the approved hosting provider MySQL/MariaDB feature.
 7. Verify schema version, owner account, read flow, and one safe write flow.
 
 No database dump is committed to Git.
@@ -174,13 +180,11 @@ No database dump is committed to Git.
    income/expense categories, and return to the previous page after quick-add.
    Portfolio screenshots are deferred until after production deployment and
    are not an Issue #7 completion gate.
-8. Issue #8 — Owner-operated Plesk deployment handoff: step-by-step instructions,
-   scripts the owner can run on the server, and inspected build artifacts for
-   manual upload. Include configuration, migrations, category initialization,
-   backup/rollback instructions, dry-run validation, and a post-deploy checklist.
-   Verify hosting capabilities before finalizing server commands and paths.
-9. The owner performs production deployment and runs the supplied verification
-   steps. Issue #8 does not include agent-operated production deployment.
+8. Issue #8 — Standard standalone build, runtime/database commands, artifact
+   verification, and generic backup/restore guidance. Hosting-specific details
+   stay in ignored local notes.
+9. The owner performs production deployment and post-deploy verification using
+   the build artifact and private hosting settings.
 
 Roadmap Issue #9 tracks the ordered MVP delivery plan and checkpoints.
 
