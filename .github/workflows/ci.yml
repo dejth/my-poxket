@@ -68,6 +68,9 @@ jobs:
           npm run db:migrate --workspace @my-poxket/api
           npm run test:integration --workspace @my-poxket/api
 
+      - name: Validate standalone archive
+        run: npm run test:build
+
       - name: Validate Docker Compose configuration
         run: |
           cp .env.example .env

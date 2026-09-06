@@ -10,7 +10,7 @@ The root agent is the Lead and Integrator and remains accountable for scope, cor
 2. Inspect the current branch, working tree, recent history, package scripts, runtime configuration, database migrations, and deployment files.
 3. Preserve unrelated and pre-existing changes. Never discard, overwrite, reformat, or include them in a task without approval.
 4. Confirm the objective, in-scope and out-of-scope behavior, acceptance criteria, risks, dependencies, and validation plan.
-5. Identify whether the task is planning, implementation, UAT support, Git delivery, database migration, or Plesk deployment. Owner UAT acceptance authorizes the develop delivery sequence defined below; production actions remain separately authorized.
+5. Identify whether the task is planning, implementation, UAT support, Git delivery, database migration, or hosting provider deployment. Owner UAT acceptance authorizes the develop delivery sequence defined below; production actions remain separately authorized.
 6. If referenced project files do not exist, report that fact and create only what the approved task requires.
 
 Do not guess missing financial rules, hosting capabilities, database coordinates, domains, GitHub identities, or production configuration. Ask when a missing choice would materially change the result.
@@ -29,8 +29,8 @@ Do not guess missing financial rules, hosting capabilities, database coordinates
 - Define recurring expenses that continue monthly until the user deletes or stops the recurring rule.
 - Show monthly activity, cash flow, category breakdowns, upcoming payments, overdue items, installments, recurring expenses, and clearly labeled outgoing/payable items.
 - Provide a polished responsive experience with deliberate mobile and desktop interfaces.
-- Deploy the CSR frontend and server-side API on the approved Plesk hosting environment.
-- Use the MySQL database provided by the Plesk hosting environment.
+- Deploy the CSR frontend and server-side API on the approved hosting environment.
+- Use the MySQL database provided by the hosting environment.
 - Support one owner, one primary currency, and one IANA timezone initially.
 
 ### Out of scope unless explicitly approved
@@ -54,7 +54,7 @@ The frontend must be a client-side-rendered web application that produces deploy
 1. React + Vite as a focused SPA/static CSR application; or
 2. Next.js configured for client-side rendering and static export only when it provides a concrete, evidenced benefit.
 
-Prefer React + Vite for the initial release unless Next.js solves a confirmed requirement. Do not introduce SSR, React Server Components, Server Actions, or a required Next.js production server when the approved deployment target is static Plesk hosting.
+Prefer React + Vite for the initial release unless Next.js solves a confirmed requirement. Do not introduce SSR, React Server Components, Server Actions, or a required Next.js production server when the approved deployment target is static hosting.
 
 The bootstrap decision must also record:
 
@@ -68,26 +68,26 @@ The bootstrap decision must also record:
 - Supported browser baseline.
 - Production build directory and deployment artifact rules.
 
-The static frontend decision does not solve database access. Select and document the server-side API runtime separately after confirming actual Plesk capabilities.
+The static frontend decision does not solve database access. Select and document the server-side API runtime separately after confirming actual hosting provider capabilities.
 
 Do not initialize or change the stack without an approved bootstrap plan.
 
-## Target Plesk architecture
+## Target runtime architecture
 
-Use a small two-layer application hosted within the approved Plesk subscription:
+Use a small two-layer application hosted within the approved hosting provider subscription:
 
 ```text
 Browser
   -> static React CSR application
   -> same-origin HTTPS API
-  -> server-side application on Plesk
+  -> server-side Node.js application
   -> MySQL database
 ```
 
 ### Frontend
 
 - Produce static assets with the repository's approved production build command.
-- Deploy the generated static directory to the Plesk document root or approved static application directory.
+- Deploy the generated static directory to the hosting provider document root or approved static application directory.
 - Configure SPA history fallback so application routes return `index.html` without intercepting `/api/**` or static assets.
 - Keep all database credentials, signing secrets, and privileged configuration out of the frontend bundle.
 - Treat every value received from the browser as untrusted.
@@ -95,20 +95,20 @@ Browser
 ### Backend API
 
 - A static CSR application must never connect directly to MySQL.
-- Confirm the actual Plesk subscription capabilities before choosing the backend runtime.
-- If Plesk Node.js Toolkit is available, prefer a small TypeScript Node.js API deployed as a Plesk Node.js application.
+- Confirm the actual hosting provider subscription capabilities before choosing the backend runtime.
+- If Node.js application hosting is available, prefer a small TypeScript Node.js API deployed as a Node.js application.
 - If Node.js hosting is unavailable but PHP is supported, use a small PHP API rather than exposing MySQL or moving secrets to the browser.
 - Keep the API and frontend on the same origin under `/api` when the hosting configuration supports it. If a separate API origin is unavoidable, document and narrowly configure CORS.
 - Use one deployable API application. Do not create microservices.
 - Expose only application-specific endpoints. Never expose arbitrary SQL or a generic database proxy.
-- Record the chosen runtime, supported version, application root, document root, startup file, environment variables, and deployment procedure in `PROJECT.md`.
+- Record runtime requirements, standard build layout, startup file, and environment variable names in `PROJECT.md`. Keep provider-specific paths, UI settings, and deployment notes only in ignored `.local/` files.
 
 ### MySQL
 
 - Access MySQL only from the server-side application.
 - Use a dedicated application database user with the minimum required privileges.
-- Do not use the Plesk administrator, root, or database-owner credential at runtime.
-- Prefer a database connection local to the Plesk host. Do not enable public remote MySQL access unless explicitly required and approved.
+- Do not use the hosting provider administrator, root, or database-owner credential at runtime.
+- Prefer a database connection local to the application host. Do not enable public remote MySQL access unless explicitly required and approved.
 - If the database is remote, require encrypted transport and restrict access to the exact application host.
 - Use versioned migrations stored in the repository.
 - Keep local, test, staging, and production databases separate.
@@ -116,7 +116,7 @@ Browser
 ## Privacy, authentication, and security
 
 - Financial data is sensitive. Do not log descriptions, amounts, card identifiers, session tokens, cookies, passwords, or personal identity details unnecessarily.
-- Never store full card numbers, CVV, PIN, bank credentials, recovery codes, GitHub credentials, Plesk credentials, or database passwords in source control.
+- Never store full card numbers, CVV, PIN, bank credentials, recovery codes, GitHub credentials, hosting provider credentials, or database passwords in source control.
 - A card record may contain a user-chosen name and optional masked suffix only.
 - The application is private. Require authentication before exposing any transaction, summary, category, card, installment, or recurring-expense data.
 - Implement one owner account initially. Do not add public sign-up or password recovery unless explicitly required.
@@ -308,7 +308,7 @@ Keep small, localized, and tightly coupled work in one agent. Never create a sub
 10. The Lead inspects and integrates every delegated result.
 11. Run required checks against the final integrated revision.
 
-Multi-agent use does not expand authorization. Agents must not commit, push, create a remote, create or mark a PR Ready, merge, close an Issue, delete branches, publish, deploy, change DNS, alter Plesk configuration, create databases/users, write secrets, apply remote migrations, or change infrastructure without the user's authorization. Owner UAT acceptance supplies authorization for the develop delivery sequence below; the Lead remains responsible for executing or explicitly delegating it.
+Multi-agent use does not expand authorization. Agents must not commit, push, create a remote, create or mark a PR Ready, merge, close an Issue, delete branches, publish, deploy, change DNS, alter hosting provider configuration, create databases/users, write secrets, apply remote migrations, or change infrastructure without the user's authorization. Owner UAT acceptance supplies authorization for the develop delivery sequence below; the Lead remains responsible for executing or explicitly delegating it.
 
 ### Quota-aware execution and UAT
 
@@ -344,20 +344,20 @@ Keep these stages explicit and report evidence at each stage:
 6. **CI-gated merge** — wait for all required CI checks and review requirements to pass for the current PR head, mark Ready if needed, and merge into `develop`. Fix failures within scope and rerun checks; do not bypass protections.
 7. **Cleanup and Issue synchronization** — verify the merged revision and develop CI, synchronize local `develop`, delete only verified merged task branches, and update/close the related Issues and roadmap so their status matches delivery. Preserve unrelated work and stop on conflicts.
 8. **Production promotion** — separate approved release flow.
-9. **Plesk deployment and production migration** — explicit approval after build, migration review, backup verification, and deployment plan.
+9. **Production deployment and production migration** — explicit approval after build, migration review, backup verification, and deployment plan.
 10. **Post-deploy verification** — verify deployed revision, authentication, database schema, smoke tests, logs, and local synchronization.
 
 “ปิด task” or “ปิดงานได้” after UAT authorizes the develop delivery sequence above. It does not authorize archiving the Codex conversation, production promotion, deployment, or production migration.
 
-## Plesk deployment rules
+## Production deployment rules
 
-- Inspect actual Plesk capabilities before finalizing the deployment design: operating system, Node.js Toolkit availability, supported Node/PHP versions, document root, application root, startup file, Git integration, SSH access, MySQL host, and database access policy.
-- Do not place Plesk credentials, database credentials, domains, IP addresses, personal identity values, or repository URLs in `AGENTS.md`.
+- Inspect actual hosting provider capabilities before finalizing the deployment design: operating system, Node.js application support, supported Node/PHP versions, document root, application root, startup file, Git integration, SSH access, MySQL host, and database access policy.
+- Do not place hosting provider credentials, database credentials, domains, IP addresses, personal identity values, or repository URLs in `AGENTS.md`.
 - Creating a database or user, changing DNS, changing document roots, enabling Node.js, writing secrets, modifying remote-access rules, applying production migrations, and deploying each require explicit authorization.
-- Keep secrets in Plesk environment configuration or an approved server-side secret file outside the public document root.
+- Keep secrets in hosting provider environment configuration or an approved server-side secret file outside the public document root.
 - Never upload source `.env` files, development fixtures, database dumps, tests, source maps containing sensitive paths, or unnecessary source files to the public document root.
 - Build the frontend in a clean environment and deploy only the expected static build artifacts.
-- Deploy the API outside the public static directory except for its controlled entry point as required by the chosen Plesk runtime.
+- Deploy the API outside the public static directory except for its controlled entry point as required by the chosen hosting provider runtime.
 - Run a production build and deployment dry run or artifact inspection before requesting deployment approval.
 - Review the exact migration list and establish a verified database backup before production migration.
 - Prefer backward-compatible expand/migrate/contract database changes once production data exists.
@@ -413,7 +413,7 @@ Until the scripts exist, report exactly which checks are unavailable rather than
 - Follow the established formatter, linter, framework, design system, and package manager. Do not add competing tools.
 - Add or update tests with every behavior change and regression fix.
 - Comments explain business reasons or non-obvious constraints, not syntax.
-- Keep dependencies minimal, locked, maintained, and compatible with the approved Plesk runtime.
+- Keep dependencies minimal, locked, maintained, and compatible with the approved hosting provider runtime.
 - Record significant architecture, authentication, financial-rule, and migration decisions in `docs/architecture/decisions`.
 - Use fictional examples and fixtures only.
 

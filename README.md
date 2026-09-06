@@ -30,7 +30,7 @@ installation rather than as a public multi-tenant service.
 Browser
   -> React + Vite static CSR application
   -> same-origin HTTPS /api
-  -> Fastify TypeScript API on Plesk Node.js
+  -> Fastify TypeScript API on Node.js
   -> MariaDB
 ```
 
@@ -48,7 +48,7 @@ live in pure domain modules rather than React components or HTTP handlers.
 - CSS design tokens and focused, accessible components.
 
 Production targets Node.js 24 LTS. Node.js 25 is an end-of-life release and is
-not an approved production runtime even if it remains selectable in Plesk.
+not an approved production runtime.
 
 ## Responsive UX approach
 
@@ -101,18 +101,21 @@ and production builds. Manual responsive and visual UAT is performed by the
 project owner through the local Node/Vite application; automated browser or
 computer-control UAT is intentionally not part of the development workflow.
 
-## Deployment overview
+## Production build
 
-The frontend `dist` directory will be deployed as static assets. The API will
-run as one Plesk Node.js application outside the public static directory, with
-`/api` routed to it on the same origin. Secrets belong in Plesk environment
-configuration, never in the frontend bundle or repository.
+```bash
+npm run build
+```
 
-Before production deployment, the exact Plesk Node LTS availability, document
-root, application root, startup file, routing, environment configuration,
-backup process, and migration procedure must be verified. Local development
-data may be exported as an ignored SQL artifact for a controlled Plesk database
-import, but only after confirming it contains no real or sensitive data.
+The standalone application is in `dist/standalone`, with an upload-ready archive
+at `dist/my-poxket.tar.gz`. It includes compiled API/domain code, static CSR
+assets, production dependencies, and `start.cjs`. Supply environment variables
+and run `node start.cjs` from the extracted application root. No build or npm
+install is needed on the server for the tested platforms.
+
+See [Build and runtime](docs/build.md) for configuration, database commands,
+verification, and supported platforms. Provider-specific settings and notes
+belong in ignored `.local/` files and are not part of the public build.
 
 ## Portfolio safety
 
@@ -131,9 +134,8 @@ also complete and passed owner UAT. Monthly activity and upcoming payables from
 Issue #6 are complete and passed owner UAT. Roadmap Issue #9 links the remaining
 responsive-polish and production-readiness phases. Issue #7 also adds
 general-purpose starter income/expense categories with repeatable initialization
-that preserves existing data. Issue #8 supplies deployment instructions, server
-scripts, and inspected build artifacts for the owner to deploy to Plesk, plus
-backup/rollback guidance and a post-deploy checklist.
+that preserves existing data. Issue #8 supplies a provider-neutral standalone build with production
+dependencies and documented runtime/database commands.
 
 See [PROJECT.md](./PROJECT.md) for the delivery plan and recorded decisions.
 
