@@ -1,0 +1,3 @@
+ALTER TABLE `installment_plans` MODIFY COLUMN `status` enum('active','completed','settled','cancelled') NOT NULL DEFAULT 'active';--> statement-breakpoint
+ALTER TABLE `installment_occurrences` ADD `closes_plan` boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE `installment_occurrences` ADD CONSTRAINT `installment_occurrences_closes_plan_paid` CHECK (`installment_occurrences`.`closes_plan` = 0 OR `installment_occurrences`.`status` = 'paid');

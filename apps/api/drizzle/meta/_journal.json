@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1788321405109,
+      "tag": "0000_supreme_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1788336623372,
+      "tag": "0001_harsh_veda",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1788402024703,
+      "tag": "0002_thin_hannibal_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1788418601730,
+      "tag": "0003_fancy_tyger_tiger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1788421722056,
+      "tag": "0004_bizarre_violations",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1788423564945,
+      "tag": "0005_flippant_bulldozer",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1788425146667,
+      "tag": "0006_harsh_bloodstorm",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1788451460952,
+      "tag": "0007_naive_blonde_phantom",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1788454182050,
+      "tag": "0008_lovely_marvex",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1788596498563,
+      "tag": "0009_bored_scream",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+title = "My Poxket public-repository secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Exclude local and generated content that is never committed"
+paths = [
+  '''(^|/)\.env$''',
+  '''(^|/)\.local/''',
+  '''(^|/)\.git/''',
+  '''(^|/)\.npm-cache/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+]

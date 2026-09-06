@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - release
+      - main
+  push:
+    branches:
+      - develop
+      - release
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mariadb:
+        image: mariadb:11.8.6
+        env:
+          MARIADB_DATABASE: my_poxket_test
+          MARIADB_PASSWORD: fictional-test-password
+          MARIADB_ROOT_PASSWORD: fictional-root-test-password
+          MARIADB_USER: my_poxket_test
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Scan repository for secrets
+        run: npm run secret:scan
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate source and production build
+        run: npm run validate
+
+      - name: Validate migrations and finance integration
+        env:
+          DATABASE_URL: mysql://my_poxket_test:fictional-test-password@127.0.0.1:3307/my_poxket_test
+          TEST_DATABASE_URL: mysql://my_poxket_test:fictional-test-password@127.0.0.1:3307/my_poxket_test
+        run: |
+          npm run db:migrate --workspace @my-poxket/api
+          npm run test:integration --workspace @my-poxket/api
+
+      - name: Validate standalone archive
+        run: npm run test:build
+
+      - name: Validate Docker Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+
+      - name: Check whitespace errors
+        run: git diff --check
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
