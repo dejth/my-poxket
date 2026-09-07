@@ -1,0 +1,28 @@
+# Local environment and secrets
+.local/
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated output
+node_modules/
+.npm-cache/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local databases, dumps, logs, and test artifacts
+artifacts/
+backups/
+*.dump
+*.log
+playwright-report/
+test-results/
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+
+# Drizzle local metadata that is not a migration
+apps/api/drizzle/local/
