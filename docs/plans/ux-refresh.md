@@ -24,7 +24,7 @@ Shared expense settlement, budget engine, shopping, pets, mood/calendar, rewards
 
 ## งานย่อยตามลำดับ
 
-- [ ] [#22](https://github.com/dejth/my-poxket/issues/22) — ล็อกสเปกภาพและลำดับข้อมูล Calm Ledger
+- [x] [#22](https://github.com/dejth/my-poxket/issues/22) — ล็อกสเปกภาพและลำดับข้อมูล Calm Ledger
 - [ ] [#23](https://github.com/dejth/my-poxket/issues/23) — ปรับสี typography และ spacing tokens
 - [ ] [#24](https://github.com/dejth/my-poxket/issues/24) — ปรับการ์ด ปุ่ม ช่องกรอก และป้ายสถานะ
 - [ ] [#25](https://github.com/dejth/my-poxket/issues/25) — ลดเมนูล่างเหลือ 4 จุดและจัดเมนูเพิ่มเติม
@@ -64,3 +64,7 @@ Spec → tokens → shared surfaces → shell/page tasks → integrated UAT. Pag
 ## Risks and checks
 
 Preserve official versus planned card dates, exact THB formatting, cancelled/paid history, finite installments, recurring stop semantics, authentication and owner-only navigation. Test source labels from real typed fields only. Use fictional fixtures from existing UAT documents; never upload the reference JPGs or their personal data. Shared CSS changes require manual regression across all pages. A backend contract gap is a new explicitly scoped Issue, not implicit authorization to change financial behavior.
+
+## Specification checkpoint
+
+The owner accepted the English [visual specification](../design/ux-refresh.md) for #22 on September 7, 2026. The specification is complete; UI implementation and application UAT remain pending. Next: #23, design tokens.
