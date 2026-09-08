@@ -186,31 +186,43 @@ summary:focus-visible {
   font-weight: 550;
 }
 
-.field input {
+.field input,
+.field select,
+.filter-bar input,
+.filter-bar select {
   width: 100%;
-  min-height: 3.25rem;
-  padding: 0.75rem 0.9rem;
+  min-height: 3rem;
+  padding: var(--space-3);
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-sm);
   color: var(--color-ink);
-  background: #fbfcfa;
+  background: var(--color-surface);
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease,
     background-color 150ms ease;
 }
 
-.field input:hover {
+.field input:hover:not(:disabled),
+.field select:hover:not(:disabled),
+.filter-bar input:hover:not(:disabled),
+.filter-bar select:hover:not(:disabled) {
   border-color: var(--color-accent);
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus,
+.filter-bar input:focus,
+.filter-bar select:focus {
   border-color: var(--color-accent);
-  background: white;
-  box-shadow: 0 0 0 4px rgb(23 108 85 / 8%);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
 }
 
-.field input[aria-invalid='true'] {
+.field input[aria-invalid='true'],
+.field select[aria-invalid='true'],
+.filter-bar input[aria-invalid='true'],
+.filter-bar select[aria-invalid='true'] {
   border-color: var(--color-error);
 }
 
@@ -261,17 +273,15 @@ summary:focus-visible {
   border: 0;
   color: white;
   background: var(--color-accent);
-  box-shadow: 0 8px 20px rgb(23 108 85 / 16%);
+  box-shadow: none;
 }
 
 .primary-button:hover:not(:disabled) {
   background: var(--color-accent-strong);
 }
 
-.primary-button:disabled,
-.secondary-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+.primary-button:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 .centered-state,
@@ -325,7 +335,8 @@ summary:focus-visible {
 }
 
 .secondary-button {
-  padding: 0 1rem;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--color-control-border);
   color: var(--color-ink);
   background: var(--color-surface);
@@ -551,13 +562,22 @@ summary:focus-visible {
   text-decoration: none;
 }
 
-.payable-status {
-  padding: 0.3rem 0.55rem;
+.payable-status,
+.status-pill,
+.status-label {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
+  font-size: var(--font-label);
+  font-weight: 650;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.payable-status {
   color: var(--color-warning);
   background: var(--color-warning-soft);
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 .payable-status.is-overdue {
@@ -641,9 +661,6 @@ summary:focus-visible {
 }
 
 .status-pill {
-  display: inline-block;
-  padding: 0.4rem 0.75rem;
-  border-radius: var(--radius-pill);
   color: var(--color-accent-strong);
   background: var(--color-accent-soft);
   font-weight: 650;
@@ -789,7 +806,7 @@ summary:focus-visible {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: 0 12px 40px rgb(23 36 31 / 4%);
+  box-shadow: var(--shadow-card);
 }
 
 .category-layout {
@@ -858,7 +875,8 @@ summary:focus-visible {
 }
 
 .installment-plan-heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
@@ -972,7 +990,7 @@ summary:focus-visible {
 .statement-payment-dialog {
   width: min(calc(100% - 2rem), 28rem);
   max-width: none;
-  max-height: calc(100svh - 2rem);
+  max-height: calc(100dvh - 2rem);
   padding: 0;
   border: 0;
   border-radius: var(--radius-lg);
@@ -987,7 +1005,7 @@ summary:focus-visible {
 
 .statement-payment-dialog .payment-dialog-sheet {
   width: 100%;
-  max-height: calc(100svh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
 }
 
@@ -1098,8 +1116,8 @@ summary:focus-visible {
   min-height: 2.8rem;
   place-items: center;
   border: 1px solid var(--color-border);
-  border-radius: 0.8rem;
-  color: #526059;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
   cursor: pointer;
 }
 
@@ -1113,18 +1131,6 @@ summary:focus-visible {
 .segmented-field input {
   position: absolute;
   opacity: 0;
-}
-
-.field select,
-.filter-bar input,
-.filter-bar select {
-  width: 100%;
-  min-height: 3rem;
-  padding: 0.65rem 0.8rem;
-  border: 1px solid var(--color-control-border);
-  border-radius: 0.8rem;
-  color: var(--color-ink);
-  background: #fbfcfa;
 }
 
 .category-groups {
@@ -1173,9 +1179,9 @@ summary:focus-visible {
 
 .small-button {
   min-height: 2.75rem;
-  padding: 0 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-sm);
   color: var(--color-ink);
   background: var(--color-surface);
   font-weight: 600;
@@ -1319,15 +1325,9 @@ summary:focus-visible {
 }
 
 .status-label {
-  display: inline-flex;
   flex: none;
-  padding: 0.25rem 0.55rem;
-  border-radius: var(--radius-pill);
   color: var(--color-accent-strong);
   background: var(--color-accent-soft);
-  font-size: var(--font-label);
-  font-weight: 650;
-  white-space: nowrap;
 }
 
 .status-label.cancelled {
@@ -1357,7 +1357,8 @@ summary:focus-visible {
 
 .row-actions {
   display: flex;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-4);
 }
 
 .row-actions .text-button {
@@ -1384,7 +1385,8 @@ summary:focus-visible {
   position: fixed;
   inset: 0;
   width: 100%;
-  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
   max-width: none;
   max-height: none;
   margin: 0;
@@ -1398,13 +1400,15 @@ summary:focus-visible {
 }
 
 .form-dialog {
-  width: min(100%, 36rem);
-  max-height: calc(100svh - 2rem);
+  width: min(100%, 35rem);
+  min-height: 0;
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: clamp(1.25rem, 4vw, 2rem);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: 0 30px 90px rgb(10 20 16 / 22%);
+  box-shadow: var(--shadow-overlay);
 }
 
 .dialog-heading {
@@ -1417,10 +1421,11 @@ summary:focus-visible {
 .icon-button {
   width: 2.75rem;
   height: 2.75rem;
+  flex: none;
   border: 0;
   border-radius: 50%;
   color: var(--color-muted);
-  background: #f0f3f0;
+  background: var(--color-neutral-soft);
   font-size: 1.5rem;
 }
 
@@ -1651,9 +1656,27 @@ summary:focus-visible {
     font-size: var(--font-label);
   }
 
+  .modal-frame[open] {
+    padding: 0;
+    place-items: stretch;
+  }
+
   .form-dialog {
     width: 100%;
-    max-height: 100svh;
+    max-height: 100dvh;
+    padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4)
+      max(var(--space-4), env(safe-area-inset-bottom));
+    border-radius: 0;
+  }
+
+  .modal-frame.payment-dialog-backdrop[open] {
+    place-items: end stretch;
+  }
+
+  .payment-dialog-sheet {
+    min-height: auto;
+    max-height: min(85dvh, 34rem);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
 }
 
@@ -1695,18 +1718,6 @@ summary:focus-visible {
     grid-column: auto;
   }
 
-  .modal-frame[open] {
-    padding: 0;
-    place-items: stretch;
-  }
-
-  .form-dialog {
-    min-height: 100svh;
-    padding: max(1.25rem, env(safe-area-inset-top)) 1.25rem
-      max(1.25rem, env(safe-area-inset-bottom));
-    border-radius: 0;
-  }
-
   .action-notice {
     inset: calc(4.75rem + env(safe-area-inset-top)) 0.75rem auto;
     width: calc(100% - 1.5rem);
@@ -1733,27 +1744,15 @@ summary:focus-visible {
     width: 100%;
   }
 
-  .modal-frame.payment-dialog-backdrop[open] {
-    place-items: end stretch;
-  }
-
-  .payment-dialog-sheet {
-    width: 100%;
-    min-height: auto;
-    max-height: min(85svh, 34rem);
-    padding: 1.25rem 1.25rem max(1.25rem, env(safe-area-inset-bottom));
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  }
-
   .statement-payment-dialog {
     width: 100%;
-    max-height: 85svh;
+    max-height: 85dvh;
     margin: auto 0 0;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
 
   .statement-payment-dialog .payment-dialog-sheet {
-    max-height: 85svh;
+    max-height: 85dvh;
   }
 }
 
@@ -1861,7 +1860,6 @@ body:has(dialog[open]) {
 @media (max-width: 620px) {
   .transaction-card-main,
   .transaction-card-meta,
-  .installment-plan-heading,
   .payment-dialog-heading {
     flex-wrap: wrap;
   }
@@ -1888,5 +1886,42 @@ body:has(dialog[open]) {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+  color: var(--color-muted);
+  background: var(--color-neutral-soft);
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+.secondary-button:hover:not(:disabled),
+.small-button:hover:not(:disabled),
+.icon-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.text-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.primary-button:active:not(:disabled) {
+  background: var(--color-accent-strong);
+}
+
+@media (max-width: 439px) {
+  .transaction-card-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .transaction-card-meta > .row-actions {
+    grid-column: 1 / -1;
   }
 }
