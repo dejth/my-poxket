@@ -25,7 +25,7 @@ Shared expense settlement, budget engine, shopping, pets, mood/calendar, rewards
 ## งานย่อยตามลำดับ
 
 - [x] [#22](https://github.com/dejth/my-poxket/issues/22) — ล็อกสเปกภาพและลำดับข้อมูล Calm Ledger
-- [ ] [#23](https://github.com/dejth/my-poxket/issues/23) — ปรับสี typography และ spacing tokens
+- [x] [#23](https://github.com/dejth/my-poxket/issues/23) — ปรับสี typography และ spacing tokens
 - [ ] [#24](https://github.com/dejth/my-poxket/issues/24) — ปรับการ์ด ปุ่ม ช่องกรอก และป้ายสถานะ
 - [ ] [#25](https://github.com/dejth/my-poxket/issues/25) — ลดเมนูล่างเหลือ 4 จุดและจัดเมนูเพิ่มเติม
 - [ ] [#26](https://github.com/dejth/my-poxket/issues/26) — ปรับ sidebar และความกว้างเนื้อหาบน tablet/desktop
@@ -67,4 +67,4 @@ Preserve official versus planned card dates, exact THB formatting, cancelled/pai
 
 ## Specification checkpoint
 
-The owner accepted the English [visual specification](../design/ux-refresh.md) for #22 on September 7, 2026. The specification is complete; UI implementation and application UAT remain pending. Next: #23, design tokens.
+The owner accepted the English [visual specification](../design/ux-refresh.md) for #22 on September 7, 2026. The specification is complete; UI implementation and application UAT remain pending. The owner accepted #23 design tokens on September 8, 2026. Next: #24, shared cards, buttons, fields, and status badges.
