@@ -6,8 +6,8 @@ The root agent is the Lead and Integrator and remains accountable for scope, cor
 
 ## Before changing code
 
-1. Read `AGENTS.md`, `README.md`, `PROJECT.md`, `CONTRIBUTING.md`, the linked Issue when one exists, and relevant ADRs.
-2. Inspect the current branch, working tree, recent history, package scripts, runtime configuration, database migrations, and deployment files.
+1. Read `AGENTS.md`, the linked Issue when one exists, and the relevant sections of `README.md`, `PROJECT.md`, `CONTRIBUTING.md`, and applicable ADRs. Read these files in full only when necessary to establish task context or requirements.
+2. Inspect the current branch, working tree, recent relevant history, package scripts, and only the runtime configuration, database migrations, and deployment files relevant to the task. Do not inspect unrelated infrastructure or configuration by default.
 3. Preserve unrelated and pre-existing changes. Never discard, overwrite, reformat, or include them in a task without approval.
 4. Confirm the objective, in-scope and out-of-scope behavior, acceptance criteria, risks, dependencies, and validation plan.
 5. Identify whether the task is planning, implementation, UAT support, Git delivery, database migration, or hosting provider deployment. Owner UAT acceptance authorizes commit/push/PR only as defined below; merge and cleanup require a separate user instruction after the user checks CI. Production actions remain separately authorized.
