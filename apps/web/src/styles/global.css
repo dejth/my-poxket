@@ -1,7 +1,11 @@
 :root {
-  color: #17241f;
-  background: #f3f5f2;
+  color: var(--color-ink);
+  background: var(--color-canvas);
   font-family: 'Anuphan Variable', ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--font-body);
+  line-height: 1.6;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --color-canvas: #f3f5f2;
@@ -12,9 +16,29 @@
   --color-accent: #176c55;
   --color-accent-strong: #105440;
   --color-error: #a53d35;
-  --radius-sm: 0.875rem;
-  --radius-lg: 1.75rem;
-  --shadow-card: 0 24px 70px rgb(23 36 31 / 8%);
+  --color-control-border: #77857d;
+  --color-accent-soft: #e8f3ed;
+  --color-warning: #805600;
+  --color-warning-soft: #fff4d6;
+  --color-error-soft: #fcece9;
+  --color-neutral-soft: #edf0ee;
+  --radius-sm: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 4px 16px rgb(23 36 31 / 4%);
+  --shadow-overlay: 0 16px 48px rgb(23 36 31 / 16%);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --font-body: 1rem;
+  --font-label: 0.875rem;
+  --font-heading: 1.75rem;
+  --font-section: 1.125rem;
+  --font-amount: 2.25rem;
 }
 
 .mobile-users-link {
@@ -32,6 +56,10 @@
   }
 }
 @media (max-width: 860px) {
+  :root {
+    --font-heading: 1.5rem;
+    --font-amount: 1.75rem;
+  }
   .mobile-users-link {
     display: block;
     padding: 0 1.25rem 1rem;
@@ -63,6 +91,17 @@ select {
   font: inherit;
 }
 
+input,
+select {
+  font-size: var(--font-body);
+}
+
+h2 {
+  font-size: var(--font-section);
+  line-height: 1.5;
+  font-weight: 600;
+}
+
 button {
   min-width: 2.75rem;
 }
@@ -85,7 +124,7 @@ summary:focus-visible {
   display: grid;
   min-height: 100svh;
   place-items: center;
-  padding: 1.5rem;
+  padding: var(--space-5);
 }
 
 .auth-card {
@@ -100,7 +139,7 @@ summary:focus-visible {
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   color: var(--color-ink);
   font-size: 1.05rem;
   font-weight: 700;
@@ -125,10 +164,10 @@ summary:focus-visible {
 
 .auth-heading h1 {
   margin: 0;
-  font-size: clamp(1.8rem, 7vw, 2.15rem);
+  font-size: var(--font-heading);
   font-weight: 650;
   letter-spacing: -0.045em;
-  line-height: 1.25;
+  line-height: 1.35;
 }
 
 .auth-heading p {
@@ -138,11 +177,12 @@ summary:focus-visible {
 }
 
 .field {
+  line-height: 1.5;
   display: grid;
-  gap: 0.45rem;
-  margin-top: 1rem;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
   color: #34413b;
-  font-size: 0.9rem;
+  font-size: var(--font-label);
   font-weight: 550;
 }
 
@@ -150,7 +190,7 @@ summary:focus-visible {
   width: 100%;
   min-height: 3.25rem;
   padding: 0.75rem 0.9rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-sm);
   color: var(--color-ink);
   background: #fbfcfa;
@@ -161,7 +201,7 @@ summary:focus-visible {
 }
 
 .field input:hover {
-  border-color: #bac6bf;
+  border-color: var(--color-accent);
 }
 
 .field input:focus {
@@ -171,13 +211,13 @@ summary:focus-visible {
 }
 
 .field input[aria-invalid='true'] {
-  border-color: #cf827b;
+  border-color: var(--color-error);
 }
 
 .field small,
 .form-error {
   color: var(--color-error);
-  font-size: 0.8rem;
+  font-size: var(--font-label);
   font-weight: 500;
 }
 
@@ -206,7 +246,7 @@ summary:focus-visible {
   margin: 0 0 1rem;
   padding: 0.7rem 0.8rem;
   border-radius: 0.75rem;
-  background: #fff1ef;
+  background: var(--color-error-soft);
 }
 
 .primary-button,
@@ -242,12 +282,12 @@ summary:focus-visible {
 .centered-state {
   display: grid;
   place-items: center;
-  padding: 1.5rem;
+  padding: var(--space-5);
 }
 
 .service-error {
   max-width: 32rem;
-  padding: 2rem;
+  padding: var(--space-6);
   border: 1px solid #e4b5af;
   border-radius: var(--radius-lg);
   background: #fff8f6;
@@ -259,7 +299,7 @@ summary:focus-visible {
 
 .eyebrow {
   margin: 0 0 0.75rem;
-  font-size: 0.72rem;
+  font-size: var(--font-label);
   font-weight: 700;
   letter-spacing: 0.14em;
 }
@@ -268,12 +308,12 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: var(--font-heading);
   font-weight: 650;
   letter-spacing: -0.05em;
 }
@@ -281,12 +321,12 @@ summary:focus-visible {
 .account-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .secondary-button {
   padding: 0 1rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   color: var(--color-ink);
   background: var(--color-surface);
 }
@@ -305,7 +345,7 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: var(--space-5);
 }
 
 .dashboard-header {
@@ -330,7 +370,7 @@ summary:focus-visible {
   color: #4c5a53;
   background: var(--color-surface);
   box-shadow: 0 8px 28px rgb(23 36 31 / 4%);
-  font-size: 0.8rem;
+  font-size: var(--font-label);
   font-weight: 650;
 }
 
@@ -352,7 +392,7 @@ summary:focus-visible {
 .dashboard-metrics {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 0.75fr));
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .dashboard-metric {
@@ -393,7 +433,7 @@ summary:focus-visible {
 .dashboard-list small,
 .cash-flow-summary dt {
   color: var(--color-muted);
-  font-size: 0.78rem;
+  font-size: var(--font-label);
 }
 
 .dashboard-metric strong {
@@ -404,7 +444,7 @@ summary:focus-visible {
 
 .dashboard-metric.is-primary strong,
 .dashboard-metric.is-negative strong {
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: var(--font-amount);
   letter-spacing: -0.045em;
 }
 
@@ -412,7 +452,7 @@ summary:focus-visible {
 .dashboard-metric.is-primary small,
 .dashboard-metric.is-negative span,
 .dashboard-metric.is-negative small {
-  color: rgb(255 255 255 / 76%);
+  color: var(--color-surface);
 }
 
 .dashboard-metric.is-income strong {
@@ -420,13 +460,13 @@ summary:focus-visible {
 }
 
 .dashboard-metric.is-expense strong {
-  color: #8b3f38;
+  color: var(--color-ink);
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
-  gap: 1rem;
+  gap: var(--space-4);
   margin-top: 1.25rem;
   align-items: start;
 }
@@ -436,7 +476,7 @@ summary:focus-visible {
 }
 
 .dashboard-section-heading {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 
 .dashboard-section-heading .eyebrow {
@@ -451,7 +491,7 @@ summary:focus-visible {
 }
 
 .dashboard-panel > .section-heading {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 
 .dashboard-list li {
@@ -471,7 +511,7 @@ summary:focus-visible {
   display: grid;
   align-items: center;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .category-breakdown li > div,
@@ -493,7 +533,7 @@ summary:focus-visible {
   flex-wrap: wrap;
   margin-top: 0.65rem;
   color: var(--color-muted);
-  font-size: 0.8rem;
+  font-size: var(--font-label);
 }
 
 .dashboard-item-meta .small-button,
@@ -513,26 +553,26 @@ summary:focus-visible {
 
 .payable-status {
   padding: 0.3rem 0.55rem;
-  border-radius: 999px;
-  color: #6c5011;
-  background: #fff3cf;
+  border-radius: var(--radius-pill);
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
   font-weight: 700;
   white-space: nowrap;
 }
 
 .payable-status.is-overdue {
   color: var(--color-error);
-  background: #fff1ef;
+  background: var(--color-error-soft);
 }
 
 .payable-status.is-paid {
   color: var(--color-accent-strong);
-  background: #ddefe8;
+  background: var(--color-accent-soft);
 }
 
 .payable-status.is-cancelled {
-  color: #59645f;
-  background: #edf0ed;
+  color: var(--color-muted);
+  background: var(--color-neutral-soft);
 }
 
 .cash-flow-summary {
@@ -545,7 +585,7 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   padding: 0.8rem 0;
   border-bottom: 1px solid #edf0ed;
 }
@@ -573,15 +613,15 @@ summary:focus-visible {
 }
 
 .payable-panel {
-  padding: 0.75rem;
+  padding: var(--space-3);
 }
 
 .payable-list {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .payable-list li {
-  padding: 1rem;
+  padding: var(--space-4);
   border: 1px solid #e7ece8;
   border-radius: 1rem;
   background: #fbfcfb;
@@ -603,9 +643,9 @@ summary:focus-visible {
 .status-pill {
   display: inline-block;
   padding: 0.4rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--color-accent-strong);
-  background: #ddefe8;
+  background: var(--color-accent-soft);
   font-weight: 650;
 }
 
@@ -628,7 +668,7 @@ summary:focus-visible {
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   padding: 0.25rem 0.5rem 1.5rem;
   color: var(--color-ink);
   font-size: 1.05rem;
@@ -638,7 +678,7 @@ summary:focus-visible {
 
 .primary-nav {
   display: grid;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .nav-link,
@@ -657,7 +697,7 @@ summary:focus-visible {
 .nav-link:hover,
 .nav-link.is-active {
   color: var(--color-accent-strong);
-  background: #e8f1ed;
+  background: var(--color-accent-soft);
 }
 
 .sidebar-account {
@@ -670,7 +710,7 @@ summary:focus-visible {
 
 .account-name {
   overflow: hidden;
-  font-size: 0.85rem;
+  font-size: var(--font-label);
   font-weight: 650;
   text-overflow: ellipsis;
 }
@@ -720,7 +760,8 @@ summary:focus-visible {
 }
 
 .page-header h1 {
-  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.35;
+  font-size: var(--font-heading);
   font-weight: 650;
 }
 
@@ -735,7 +776,7 @@ summary:focus-visible {
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: var(--space-5);
 }
 
 .primary-button.action-button {
@@ -765,22 +806,22 @@ summary:focus-visible {
 .card-rule-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .statement-section {
-  margin-top: 2rem;
+  margin-top: var(--space-6);
 }
 
 .installment-plans {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .installment-list-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .installment-view-tabs {
@@ -820,7 +861,7 @@ summary:focus-visible {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .installment-plan-heading > div {
@@ -840,14 +881,14 @@ summary:focus-visible {
 .installment-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.75rem;
+  gap: var(--space-3);
   margin: 1.25rem 0;
 }
 
 .installment-summary div {
   display: grid;
   gap: 0.2rem;
-  padding: 0.75rem;
+  padding: var(--space-3);
   border-radius: var(--radius-sm);
   background: #f7f8f6;
 }
@@ -858,16 +899,16 @@ summary:focus-visible {
 .current-installment-action span,
 .current-installment-action small {
   color: var(--color-muted);
-  font-size: 0.78rem;
+  font-size: var(--font-label);
 }
 
 .current-installment-action {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
   border: 1px solid color-mix(in srgb, var(--color-accent) 24%, transparent);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
@@ -906,7 +947,7 @@ summary:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 4.5rem;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   padding-block: 0.65rem;
   border-bottom: 1px solid #edf0ed;
   content-visibility: auto;
@@ -919,7 +960,7 @@ summary:focus-visible {
 }
 
 .installment-plan-card > .text-button {
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
 }
 
 .payment-dialog-sheet {
@@ -954,7 +995,7 @@ summary:focus-visible {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .payment-dialog-heading h2,
@@ -970,7 +1011,7 @@ summary:focus-visible {
 .settlement-hint {
   margin: 0 0 0 1.75rem;
   color: var(--color-muted);
-  font-size: 0.78rem;
+  font-size: var(--font-label);
 }
 
 .payment-dialog-heading h2 {
@@ -978,7 +1019,7 @@ summary:focus-visible {
 }
 
 .payment-dialog-heading > strong {
-  color: #8b3f38;
+  color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -990,25 +1031,25 @@ summary:focus-visible {
 .payment-dialog-actions {
   display: grid;
   grid-template-columns: 1fr 1.5fr;
-  gap: 0.75rem;
+  gap: var(--space-3);
   margin-top: 1.25rem;
 }
 
 .statement-dates {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
+  gap: var(--space-3);
   margin: 1rem 0 0;
 }
 
 .statement-dates dt {
   color: var(--color-muted);
-  font-size: 0.72rem;
+  font-size: var(--font-label);
 }
 
 .statement-dates dd {
   margin: 0.2rem 0 0;
-  font-size: 0.82rem;
+  font-size: var(--font-label);
   font-weight: 650;
 }
 
@@ -1019,35 +1060,35 @@ summary:focus-visible {
 
 .compact-form > .primary-button,
 .installment-plan-form > .primary-button {
-  margin-top: 1rem;
+  margin-top: var(--space-4);
 }
 
 .section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   margin-bottom: 1.25rem;
 }
 
 .section-heading h2,
 .dialog-heading h2 {
-  font-size: 1.35rem;
+  font-size: var(--font-section);
 }
 
 .segmented-field {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   border: 0;
 }
 
 .segmented-field legend {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
   color: #34413b;
-  font-size: 0.9rem;
+  font-size: var(--font-label);
   font-weight: 550;
 }
 
@@ -1065,7 +1106,7 @@ summary:focus-visible {
 .segmented-field label:has(input:checked) {
   border-color: var(--color-accent);
   color: var(--color-accent-strong);
-  background: #e8f1ed;
+  background: var(--color-accent-soft);
   font-weight: 650;
 }
 
@@ -1080,7 +1121,7 @@ summary:focus-visible {
   width: 100%;
   min-height: 3rem;
   padding: 0.65rem 0.8rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: 0.8rem;
   color: var(--color-ink);
   background: #fbfcfa;
@@ -1093,7 +1134,7 @@ summary:focus-visible {
 
 .category-groups h3 {
   margin: 0 0 0.65rem;
-  font-size: 0.82rem;
+  font-size: var(--font-label);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1111,7 +1152,7 @@ summary:focus-visible {
   min-height: 4rem;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   border-bottom: 1px solid #edf0ed;
 }
 
@@ -1162,7 +1203,7 @@ summary:focus-visible {
   min-height: 3.25rem;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
@@ -1195,17 +1236,17 @@ summary:focus-visible {
 .filter-bar {
   display: grid;
   grid-template-columns: repeat(4, minmax(8rem, 1fr));
-  gap: 0.75rem;
+  gap: var(--space-3);
   align-items: end;
-  margin-bottom: 1rem;
-  padding: 1rem;
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
 }
 
 .filter-bar label {
   display: grid;
   gap: 0.35rem;
   color: #45534c;
-  font-size: 0.78rem;
+  font-size: var(--font-label);
   font-weight: 600;
 }
 
@@ -1237,7 +1278,7 @@ summary:focus-visible {
 .desktop-transaction-table th {
   color: var(--color-muted);
   background: #fafbf9;
-  font-size: 0.76rem;
+  font-size: var(--font-label);
   font-weight: 650;
   letter-spacing: 0.03em;
 }
@@ -1274,54 +1315,54 @@ summary:focus-visible {
 }
 
 .expense {
-  color: #8b3f38;
+  color: var(--color-ink);
 }
 
 .status-label {
   display: inline-flex;
   flex: none;
   padding: 0.25rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--color-accent-strong);
-  background: #e1f0e9;
-  font-size: 0.75rem;
+  background: var(--color-accent-soft);
+  font-size: var(--font-label);
   font-weight: 650;
   white-space: nowrap;
 }
 
 .status-label.cancelled {
-  color: #7d3a34;
-  background: #f8e4e1;
+  color: var(--color-muted);
+  background: var(--color-neutral-soft);
 }
 
 .status-label.superseded {
-  color: #735614;
-  background: #f5ebcf;
+  color: var(--color-muted);
+  background: var(--color-neutral-soft);
 }
 
 .status-label.completed {
   color: var(--color-accent-strong);
-  background: #dceee6;
+  background: var(--color-accent-soft);
 }
 
 .status-label.settled {
-  color: #6f4c00;
-  background: #f5ebcf;
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
 }
 
 .status-label.stopped {
-  color: #5f6662;
-  background: #e8ebe9;
+  color: var(--color-muted);
+  background: var(--color-neutral-soft);
 }
 
 .row-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .row-actions .text-button {
   min-height: 2.75rem;
-  font-size: 0.82rem;
+  font-size: var(--font-label);
 }
 
 .mobile-transaction-cards {
@@ -1332,11 +1373,11 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--space-4);
+  padding: var(--space-4);
   border-top: 1px solid var(--color-border);
   color: var(--color-muted);
-  font-size: 0.82rem;
+  font-size: var(--font-label);
 }
 
 .modal-frame[open] {
@@ -1351,7 +1392,7 @@ summary:focus-visible {
   color: var(--color-ink);
   z-index: 50;
   display: grid;
-  padding: 1rem;
+  padding: var(--space-4);
   background: transparent;
   place-items: center;
 }
@@ -1370,7 +1411,7 @@ summary:focus-visible {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .icon-button {
@@ -1387,7 +1428,7 @@ summary:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 1rem;
-  margin-top: 1.5rem;
+  margin-top: var(--space-5);
 }
 
 .transaction-form .segmented-field,
@@ -1400,8 +1441,8 @@ summary:focus-visible {
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
 }
 
 .dialog-actions .primary-button {
@@ -1511,12 +1552,12 @@ summary:focus-visible {
     min-height: 3.25rem;
     place-items: center;
     border-radius: 0.75rem;
-    font-size: 0.78rem;
+    font-size: var(--font-label);
   }
 
   .bottom-nav-link.is-active {
     color: var(--color-accent-strong);
-    background: #e8f1ed;
+    background: var(--color-accent-soft);
   }
 
   .page-shell {
@@ -1595,7 +1636,7 @@ summary:focus-visible {
   .transaction-card p {
     margin: 0.25rem 0 0;
     color: var(--color-muted);
-    font-size: 0.78rem;
+    font-size: var(--font-label);
   }
 
   .transaction-card strong {
@@ -1607,7 +1648,7 @@ summary:focus-visible {
     align-items: center;
     margin-top: 0.85rem;
     color: var(--color-muted);
-    font-size: 0.78rem;
+    font-size: var(--font-label);
   }
 
   .form-dialog {
@@ -1750,12 +1791,7 @@ summary:focus-visible {
   .secondary-button {
     transition:
       background-color 150ms ease,
-      transform 150ms ease;
-  }
-
-  .primary-button:active:not(:disabled),
-  .secondary-button:active:not(:disabled) {
-    transform: translateY(1px);
+      box-shadow 150ms ease;
   }
 }
 
@@ -1809,7 +1845,7 @@ body:has(dialog[open]) {
 .query-error {
   display: grid;
   justify-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .query-error p {
@@ -1850,6 +1886,7 @@ body:has(dialog[open]) {
   *::before,
   *::after {
     transition: none !important;
+    animation: none !important;
     scroll-behavior: auto !important;
   }
 }
