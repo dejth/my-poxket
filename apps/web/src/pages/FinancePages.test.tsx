@@ -166,7 +166,9 @@ describe('finance pages', () => {
         `${router.state.location.pathname}${router.state.location.search}${router.state.location.hash}`,
       ).toBe(origin),
     )
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
     if (action === 'save')
       expect(
         queryClient.getQueryState(['dashboard-summary', '2026-09'])
