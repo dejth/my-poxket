@@ -91,9 +91,7 @@ describe('finance pages', () => {
       await screen.findByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
-    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it.each([
@@ -168,7 +166,9 @@ describe('finance pages', () => {
         `${router.state.location.pathname}${router.state.location.search}${router.state.location.hash}`,
       ).toBe(origin),
     )
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
     if (action === 'save')
       expect(
         queryClient.getQueryState(['dashboard-summary', '2026-09'])
