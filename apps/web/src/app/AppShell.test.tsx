@@ -111,3 +111,41 @@ describe('mobile navigation', () => {
     ).toBeDisabled()
   })
 })
+
+describe('desktop shell', () => {
+  it.each(['owner', 'member'] as const)(
+    'preserves navigation and account actions for %s',
+    (role) => {
+      setup('/users', role)
+      const sidebar = within(screen.getByRole('complementary'))
+      expect(
+        sidebar.getAllByRole('link').map((link) => link.getAttribute('href')),
+      ).toEqual([
+        '/',
+        '/',
+        '/transactions',
+        '/credit-cards',
+        '/installments',
+        '/recurring-expenses',
+        '/categories',
+        ...(role === 'owner' ? ['/users'] : []),
+      ])
+      if (role === 'owner')
+        expect(sidebar.getByRole('link', { name: 'ผู้ใช้' })).toHaveAttribute(
+          'aria-current',
+          'page',
+        )
+      else
+        expect(
+          sidebar.queryByRole('link', { name: 'ผู้ใช้' }),
+        ).not.toBeInTheDocument()
+      expect(sidebar.getByRole('region', { name: 'บัญชี' })).toHaveTextContent(
+        'sample-user',
+      )
+      expect(sidebar.getByRole('button', { name: 'ออกจากระบบ' })).toBeEnabled()
+      expect(
+        screen.getByRole('link', { name: 'ข้ามไปเนื้อหา' }),
+      ).toHaveAttribute('href', '#main-content')
+    },
+  )
+})

@@ -95,11 +95,13 @@ describe('finance pages', () => {
   })
 
   it.each([
-    ['/', 'cancel'],
-    ['/credit-cards?view=history#statements', 'cancel'],
-    ['/installments', 'save'],
-    ['/transactions', 'save'],
-  ])('returns quick-add from %s after %s', async (origin, action) => {
+    ['/', 'cancel', 'เพิ่มรายการด่วน'],
+    ['/credit-cards?view=history#statements', 'cancel', 'เพิ่มรายการด่วน'],
+    ['/installments', 'save', 'เพิ่มรายการด่วน'],
+    ['/transactions', 'save', 'เพิ่มรายการด่วน'],
+    ['/credit-cards?view=history#statements', 'cancel', 'เพิ่มรายการ'],
+    ['/installments', 'save', 'เพิ่มรายการ'],
+  ])('%s: %s via %s', async (origin, action, link) => {
     stubFinanceFetch({
       categories: [
         {
@@ -138,7 +140,7 @@ describe('finance pages', () => {
         <RouterProvider router={router} />
       </QueryClientProvider>,
     )
-    fireEvent.click(screen.getByRole('link', { name: 'เพิ่มรายการด่วน' }))
+    fireEvent.click(screen.getByRole('link', { name: link }))
     const dialog = await screen.findByRole('dialog', {
       name: 'เพิ่มรายรับหรือรายจ่าย',
     })

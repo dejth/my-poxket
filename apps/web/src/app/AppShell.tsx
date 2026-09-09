@@ -63,7 +63,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-account">
+        <section className="sidebar-account" aria-label="บัญชี">
           {session.user.role === 'owner' ? (
             <NavLink className="nav-link" to="/users">
               ผู้ใช้
@@ -78,10 +78,19 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
           >
             {isSigningOut ? 'กำลังออก…' : 'ออกจากระบบ'}
           </button>
-        </div>
+        </section>
       </aside>
 
       <div className="app-content">
+        <header className="desktop-shell-header">
+          <Link
+            className="primary-button"
+            state="quick-add"
+            to="/transactions?action=new"
+          >
+            เพิ่มรายการ
+          </Link>
+        </header>
         <header className="mobile-topbar">
           <NavLink className="app-brand" to="/" aria-label="My Poxket">
             <span className="brand-mark" aria-hidden="true">
