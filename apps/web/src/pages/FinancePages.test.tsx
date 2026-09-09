@@ -91,7 +91,9 @@ describe('finance pages', () => {
       await screen.findByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
   })
 
   it.each([
