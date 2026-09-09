@@ -156,71 +156,6 @@ export function DashboardPage() {
             </div>
           </section>
 
-          <section className="dashboard-grid">
-            <section
-              className="surface dashboard-panel"
-              aria-labelledby="categories-title"
-            >
-              <div className="section-heading">
-                <div>
-                  <h2 id="categories-title">แยกตามหมวดหมู่</h2>
-                  <p>รวมจากรายการที่ยังใช้งานอยู่</p>
-                </div>
-              </div>
-              {summary.activity.categories.length === 0 ? (
-                <p className="muted-state">ยังไม่มีกิจกรรมในเดือนนี้</p>
-              ) : (
-                <ul className="dashboard-list category-breakdown">
-                  {summary.activity.categories.map((category) => (
-                    <li key={`${category.direction}:${category.categoryId}`}>
-                      <div>
-                        <strong>{category.categoryName}</strong>
-                        <small>
-                          {category.direction === 'income'
-                            ? 'รายรับ'
-                            : 'รายจ่าย'}
-                        </small>
-                      </div>
-                      <strong>{formatThbMinor(category.amountMinor)}</strong>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section
-              className="surface dashboard-panel"
-              aria-labelledby="cash-flow-title"
-            >
-              <div className="section-heading">
-                <div>
-                  <h2 id="cash-flow-title">กระแสเงินสด</h2>
-                  <p>ไม่รวมยอดซื้อบัตรจนกว่าจะจ่ายรอบบัญชี</p>
-                </div>
-              </div>
-              <dl className="cash-flow-summary">
-                <div
-                  className={
-                    BigInt(summary.cashFlow.netMinor) < 0n
-                      ? 'is-negative'
-                      : 'is-positive'
-                  }
-                >
-                  <dt>เงินเข้า</dt>
-                  <dd>{formatThbMinor(summary.cashFlow.inflowMinor)}</dd>
-                </div>
-                <div>
-                  <dt>เงินออก</dt>
-                  <dd>{formatThbMinor(summary.cashFlow.outflowMinor)}</dd>
-                </div>
-                <div>
-                  <dt>คงเหลือสุทธิ</dt>
-                  <dd>{formatThbMinor(summary.cashFlow.netMinor)}</dd>
-                </div>
-              </dl>
-            </section>
-          </section>
-
           <section
             className="dashboard-section"
             aria-labelledby="payables-title"
@@ -264,6 +199,71 @@ export function DashboardPage() {
                 </ul>
               )}
             </div>
+          </section>
+
+          <section className="dashboard-grid">
+            <section
+              className="surface dashboard-panel"
+              aria-labelledby="categories-title"
+            >
+              <div className="section-heading">
+                <div>
+                  <h2 id="categories-title">แยกตามหมวดหมู่</h2>
+                  <p>รวมจากรายการที่ยังใช้งานอยู่</p>
+                </div>
+              </div>
+              {summary.activity.categories.length === 0 ? (
+                <p className="muted-state">ยังไม่มีกิจกรรมในเดือนนี้</p>
+              ) : (
+                <ul className="dashboard-list category-breakdown">
+                  {summary.activity.categories.map((category) => (
+                    <li key={`${category.direction}:${category.categoryId}`}>
+                      <div>
+                        <strong>{category.categoryName}</strong>
+                        <small>
+                          {category.direction === 'income'
+                            ? 'รายรับ'
+                            : 'รายจ่าย'}
+                        </small>
+                      </div>
+                      <strong>{formatThbMinor(category.amountMinor)}</strong>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section
+              className="surface dashboard-panel"
+              aria-labelledby="cash-flow-title"
+            >
+              <div className="section-heading">
+                <div>
+                  <h2 id="cash-flow-title">กระแสเงินสด</h2>
+                  <p>ตามวันที่จ่าย ไม่รวมยอดซื้อบัตรจนกว่าจะจ่ายรอบบัญชี</p>
+                </div>
+              </div>
+              <dl className="cash-flow-summary">
+                <div
+                  className={
+                    BigInt(summary.cashFlow.netMinor) < 0n
+                      ? 'is-negative'
+                      : 'is-positive'
+                  }
+                >
+                  <dt>เงินเข้า</dt>
+                  <dd>{formatThbMinor(summary.cashFlow.inflowMinor)}</dd>
+                </div>
+                <div>
+                  <dt>เงินออก</dt>
+                  <dd>{formatThbMinor(summary.cashFlow.outflowMinor)}</dd>
+                </div>
+                <div>
+                  <dt>สุทธิกระแสเงินสด</dt>
+                  <dd>{formatThbMinor(summary.cashFlow.netMinor)}</dd>
+                </div>
+              </dl>
+            </section>
           </section>
 
           <section

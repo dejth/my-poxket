@@ -289,6 +289,20 @@ describe('finance pages', () => {
     expect(screen.getByText('แผนผ่อนสมมติ')).toBeInTheDocument()
     expect(screen.getByText('ปิดยอดสมมติ')).toBeInTheDocument()
 
+    const headings = [
+      'กิจกรรมเดือน กันยายน 2569',
+      'ยอดที่ต้องจ่าย',
+      'แยกตามหมวดหมู่',
+      'กระแสเงินสด',
+      'ประวัติเดือนนี้',
+    ].map((name) => screen.getByRole('heading', { name }))
+    for (let index = 1; index < headings.length; index += 1) {
+      expect(
+        headings[index - 1]!.compareDocumentPosition(headings[index]!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    }
+
     const payButton = screen.getByRole('button', { name: 'บันทึกการจ่าย' })
     fireEvent.click(payButton)
     expect(
@@ -322,6 +336,69 @@ describe('finance pages', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText('ยังไม่มีประวัติการจ่ายหรือยกเลิกในเดือนนี้'),
+    ).toBeInTheDocument()
+  })
+
+  it('removes the previous summary while a newly selected month loads', async () => {
+    let resolveOctober!: (response: Response) => void
+    const octoberResponse = new Promise<Response>((resolve) => {
+      resolveOctober = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url
+        if (url.includes('period=2026-10')) return octoberResponse
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              url.includes('/api/dashboard-summary')
+                ? emptyDashboardSummary()
+                : {},
+            ),
+            { headers: { 'content-type': 'application/json' }, status: 200 },
+          ),
+        )
+      }),
+    )
+    renderPage(<DashboardPage />)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'กิจกรรมเดือน กันยายน 2569',
+      }),
+    ).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('เดือนที่สรุป'), {
+      target: { value: '2026-10' },
+    })
+
+    expect(await screen.findByText('กำลังสรุปข้อมูล…')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', {
+        name: 'กิจกรรมเดือน กันยายน 2569',
+      }),
+    ).not.toBeInTheDocument()
+
+    resolveOctober(
+      new Response(
+        JSON.stringify({
+          ...emptyDashboardSummary(),
+          period: '2026-10',
+          periodEnd: '2026-10-31',
+          periodStart: '2026-10-01',
+        }),
+        { headers: { 'content-type': 'application/json' }, status: 200 },
+      ),
+    )
+    expect(
+      await screen.findByRole('heading', {
+        name: 'กิจกรรมเดือน ตุลาคม 2569',
+      }),
     ).toBeInTheDocument()
   })
 
