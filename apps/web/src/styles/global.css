@@ -466,7 +466,7 @@ summary:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
   gap: var(--space-4);
-  margin-top: 1.25rem;
+  margin-top: 2.5rem;
   align-items: start;
 }
 
