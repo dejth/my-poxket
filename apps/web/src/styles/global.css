@@ -551,6 +551,7 @@ summary:focus-visible {
 }
 
 .payable-status,
+.source-badge,
 .status-pill,
 .status-label {
   display: inline-flex;
@@ -563,7 +564,23 @@ summary:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.source-badge {
+  color: var(--color-ink);
+  background: var(--color-neutral-soft);
+}
+
+.source-badge.is-credit_card_statement {
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+}
+
+.dashboard-item-date {
+  display: grid;
+  gap: var(--space-1);
+}
+
 .payable-status {
+  gap: var(--space-1);
   color: var(--color-warning);
   background: var(--color-warning-soft);
 }
@@ -1749,6 +1766,14 @@ summary:focus-visible {
 
   .dashboard-item-meta {
     gap: 0.5rem 0.75rem;
+  }
+
+  .dashboard-item-main {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-item-main > strong {
+    justify-self: end;
   }
 
   .filter-bar {

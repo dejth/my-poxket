@@ -236,7 +236,7 @@ describe('finance pages', () => {
         history: [
           {
             amountMinor: '50000',
-            context: 'ผ่อน 2/2 · settled',
+            context: 'ผ่อน 2/2 · ปิดยอดก่อนกำหนด',
             date: '2026-09-02',
             dueDate: '2026-09-02',
             id: 'installment:history',
@@ -244,12 +244,22 @@ describe('finance pages', () => {
             status: 'paid',
             title: 'ปิดยอดสมมติ',
           },
+          {
+            amountMinor: '7000',
+            context: 'ประจำ 2026-09',
+            date: '2026-09-03',
+            dueDate: '2026-09-03',
+            id: 'recurring:history',
+            source: 'recurring',
+            status: 'cancelled',
+            title: 'บริการสมมติที่ยกเลิก',
+          },
         ],
         payables: [
           {
             amountMinor: '30000',
             cardId: fictionalCard.id,
-            context: 'รอบบัญชี 2026-09-17 · ครบกำหนด 2026-10-01',
+            context: 'รอบบัญชี 2026-09-17',
             dueDate: '2026-09-30',
             id: `card:${fictionalCard.id}:2026-09-17`,
             officialDueDate: '2026-10-01',
@@ -266,6 +276,15 @@ describe('finance pages', () => {
             source: 'installment',
             status: 'unpaid',
             title: 'แผนผ่อนสมมติ',
+          },
+          {
+            amountMinor: '7000',
+            context: 'ประจำ 2026-10',
+            dueDate: '2026-10-14',
+            id: 'recurring:future',
+            source: 'recurring',
+            status: 'unpaid',
+            title: 'บริการสมมติ',
           },
         ],
         period: '2026-09',
@@ -288,6 +307,23 @@ describe('finance pages', () => {
     expect(screen.getByText('เกินกำหนด')).toBeInTheDocument()
     expect(screen.getByText('แผนผ่อนสมมติ')).toBeInTheDocument()
     expect(screen.getByText('ปิดยอดสมมติ')).toBeInTheDocument()
+    expect(screen.getByText('รอบบัญชี 2026-09-17')).toHaveClass(
+      'source-badge',
+      'is-credit_card_statement',
+    )
+    expect(screen.getByText('ผ่อน 1/10')).toHaveClass(
+      'source-badge',
+      'is-installment',
+    )
+    expect(screen.getByText('ประจำ 2026-10')).toHaveClass(
+      'source-badge',
+      'is-recurring',
+    )
+    expect(screen.getByText('วางแผน 30 ก.ย. 2569')).toBeInTheDocument()
+    expect(screen.getByText('ครบกำหนด 1 ต.ค. 2569')).toBeInTheDocument()
+    expect(screen.getByText('จ่ายแล้ว')).toBeInTheDocument()
+    expect(screen.getByText('ยกเลิก')).toBeInTheDocument()
+    expect(screen.getByText('บริการสมมติที่ยกเลิก')).toBeInTheDocument()
 
     const headings = [
       'กิจกรรมเดือน กันยายน 2569',
