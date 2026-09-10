@@ -223,10 +223,22 @@ describe('finance pages', () => {
               categoryName: 'อาหารสมมติ',
               direction: 'expense',
             },
+            {
+              amountMinor: '10000',
+              categoryId: '33333333-3333-4333-8333-333333333333',
+              categoryName: 'เดินทางสมมติ',
+              direction: 'expense',
+            },
+            {
+              amountMinor: '100000',
+              categoryId: '22222222-2222-4222-8222-222222222222',
+              categoryName: 'เงินเดือนสมมติ',
+              direction: 'income',
+            },
           ],
-          expenseMinor: '30000',
+          expenseMinor: '40000',
           incomeMinor: '100000',
-          netMinor: '70000',
+          netMinor: '60000',
         },
         cashFlow: {
           inflowMinor: '100000',
@@ -323,6 +335,13 @@ describe('finance pages', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('-฿1,000.00')).toBeInTheDocument()
     expect(screen.getByText('อาหารสมมติ')).toBeInTheDocument()
+    expect(screen.getByText('เดินทางสมมติ')).toBeInTheDocument()
+    expect(screen.getByText('75%')).toBeInTheDocument()
+    expect(screen.getByText('25%')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'รายรับตามหมวดหมู่' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('เงินเดือนสมมติ')).toBeInTheDocument()
     expect(screen.getByText('เกินกำหนด')).toBeInTheDocument()
     expect(screen.getByText('แผนผ่อนสมมติ')).toBeInTheDocument()
     expect(screen.getByText('ปิดยอดสมมติ')).toBeInTheDocument()
@@ -354,7 +373,7 @@ describe('finance pages', () => {
       'กิจกรรมเดือน กันยายน 2569',
       'ยอดที่ต้องจ่าย',
       'รายการล่าสุดในเดือนนี้',
-      'แยกตามหมวดหมู่',
+      'สัดส่วนรายจ่าย',
       'กระแสเงินสด',
       'ประวัติเดือนนี้',
     ].map((name) => screen.getByRole('heading', { name }))
@@ -391,7 +410,7 @@ describe('finance pages', () => {
     renderPage(<DashboardPage />)
 
     expect(
-      await screen.findByText('ยังไม่มีกิจกรรมในเดือนนี้'),
+      await screen.findByText('ยังไม่มีรายจ่ายในเดือนนี้'),
     ).toBeInTheDocument()
     expect(
       screen.getByText('ไม่มียอดค้างหรือยอดที่กำลังจะถึงกำหนด'),
