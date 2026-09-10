@@ -631,7 +631,28 @@ function TransactionFormDialog({
             )
           }}
         >
-          <fieldset className="segmented-field">
+          <label className="field transaction-amount-field">
+            จำนวนเงิน (บาท)
+            <input
+              aria-invalid={Boolean(form.formState.errors.amount)}
+              aria-describedby={
+                form.formState.errors.amount
+                  ? 'TransactionsPage-amount-error'
+                  : undefined
+              }
+              autoComplete="off"
+              inputMode="decimal"
+              placeholder="0.00"
+              {...form.register('amount')}
+            />
+            {form.formState.errors.amount ? (
+              <small id="TransactionsPage-amount-error" role="alert">
+                {form.formState.errors.amount.message}
+              </small>
+            ) : null}
+          </label>
+
+          <fieldset className="segmented-field transaction-direction-field">
             <legend>ประเภท</legend>
             <label>
               <input
@@ -661,26 +682,6 @@ function TransactionFormDialog({
               รายรับ
             </label>
           </fieldset>
-
-          <label className="field">
-            จำนวนเงิน (บาท)
-            <input
-              aria-invalid={Boolean(form.formState.errors.amount)}
-              aria-describedby={
-                form.formState.errors.amount
-                  ? 'TransactionsPage-amount-error'
-                  : undefined
-              }
-              inputMode="decimal"
-              placeholder="0.00"
-              {...form.register('amount')}
-            />
-            {form.formState.errors.amount ? (
-              <small id="TransactionsPage-amount-error" role="alert">
-                {form.formState.errors.amount.message}
-              </small>
-            ) : null}
-          </label>
           <label className="field">
             วันที่รายการ
             <input
