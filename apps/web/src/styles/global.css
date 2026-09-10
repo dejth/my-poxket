@@ -830,20 +830,26 @@ summary:focus-visible {
   margin-left: var(--sidebar-width);
 }
 
-.desktop-shell-header {
-  display: flex;
-  justify-content: flex-end;
-  width: min(100%, 79rem);
-  margin: 0 auto;
-  padding: var(--space-5) var(--space-5) 0;
-}
-
 .mobile-topbar {
   display: none;
 }
 
 .mobile-quick-add {
-  display: none;
+  position: fixed;
+  inset: auto 1.5rem 1.5rem auto;
+  z-index: 30;
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 4px solid var(--color-canvas);
+  border-radius: 50%;
+  color: white;
+  background: var(--color-accent);
+  box-shadow: 0 14px 34px rgb(23 36 31 / 28%);
+  font-size: 2rem;
+  line-height: 1;
+  place-items: center;
+  text-decoration: none;
 }
 
 .page-shell {
@@ -859,10 +865,6 @@ summary:focus-visible {
 
   .page-shell {
     padding: var(--space-6);
-  }
-
-  .desktop-shell-header {
-    padding: var(--space-6) var(--space-6) 0;
   }
 }
 
@@ -1342,9 +1344,8 @@ summary:focus-visible {
 
 .filter-bar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(8rem, 1fr));
+  grid-template-columns: minmax(12rem, 1fr) auto;
   gap: var(--space-3);
-  align-items: end;
   margin-bottom: var(--space-4);
   padding: var(--space-4);
 }
@@ -1357,8 +1358,118 @@ summary:focus-visible {
   font-weight: 600;
 }
 
-.filter-bar .secondary-button {
+.transaction-type-filter {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.transaction-type-filter legend {
+  margin-bottom: 0.35rem;
+  color: #45534c;
+  font-size: var(--font-label);
+  font-weight: 600;
+}
+
+.transaction-type-filter > div {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.transaction-type-filter label {
+  position: relative;
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.transaction-type-filter input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.transaction-type-filter label:has(input:checked) {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+}
+
+.transaction-type-filter label:has(input:focus-visible) {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.transaction-type-filter label > span {
+  display: none;
+}
+
+.transaction-type-filter label:has(input:checked) > span {
+  display: inline;
+}
+
+.additional-filters {
+  min-width: 0;
+}
+
+.additional-filters summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  width: fit-content;
+  color: var(--color-accent-strong);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.additional-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.filter-actions button {
+  flex: none;
+  min-height: 2.75rem;
+  padding-inline: var(--space-4);
   white-space: nowrap;
+}
+
+.filter-actions .primary-button {
+  width: auto;
+}
+
+.applied-filters {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  gap: var(--space-2);
+  grid-column: 1 / -1;
+  color: var(--color-muted);
+  font-size: var(--font-label);
+  flex-wrap: wrap;
+}
+
+.applied-filters strong {
+  color: var(--color-ink);
 }
 
 .transaction-surface {
@@ -1617,7 +1728,6 @@ summary:focus-visible {
 }
 
 @media (max-width: 860px) {
-  .desktop-shell-header,
   .app-sidebar {
     display: none;
   }
@@ -1697,29 +1807,24 @@ summary:focus-visible {
   }
 
   .mobile-quick-add {
-    position: fixed;
     inset: auto 1rem calc(5rem + env(safe-area-inset-bottom)) auto;
-    z-index: 30;
-    display: grid;
-    width: 3.5rem;
-    height: 3.5rem;
-    border: 4px solid var(--color-canvas);
-    border-radius: 50%;
-    color: white;
-    background: var(--color-accent);
-    box-shadow: 0 14px 34px rgb(23 36 31 / 28%);
-    font-size: 2rem;
-    line-height: 1;
-    place-items: center;
-    text-decoration: none;
   }
 
   .filter-bar {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
-  .filter-bar label:first-child {
-    grid-column: span 2;
+  .transaction-type-filter > div {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .transaction-type-filter label {
+    padding-inline: var(--space-2);
+  }
+
+  .additional-filter-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .desktop-transaction-table {
@@ -1834,6 +1939,14 @@ summary:focus-visible {
 
   .filter-bar label:first-child {
     grid-column: auto;
+  }
+
+  .additional-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    flex-wrap: wrap;
   }
 
   .action-notice {

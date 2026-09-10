@@ -82,15 +82,6 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
       </aside>
 
       <div className="app-content">
-        <header className="desktop-shell-header">
-          <Link
-            className="primary-button"
-            state="quick-add"
-            to="/transactions?action=new"
-          >
-            เพิ่มรายการ
-          </Link>
-        </header>
         <header className="mobile-topbar">
           <NavLink className="app-brand" to="/" aria-label="My Poxket">
             <span className="brand-mark" aria-hidden="true">

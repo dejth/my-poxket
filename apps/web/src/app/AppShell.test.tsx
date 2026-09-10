@@ -113,6 +113,13 @@ describe('mobile navigation', () => {
 })
 
 describe('desktop shell', () => {
+  it('uses one global quick-add FAB on the transaction page', () => {
+    setup('/transactions')
+    expect(
+      screen.getAllByRole('link', { name: 'เพิ่มรายการด่วน' }),
+    ).toHaveLength(1)
+  })
+
   it.each(['owner', 'member'] as const)(
     'preserves navigation and account actions for %s',
     (role) => {

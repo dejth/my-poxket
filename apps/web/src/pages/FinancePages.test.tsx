@@ -62,18 +62,16 @@ describe('finance pages', () => {
       categories: [],
       transactions: [],
     })
-    renderPage(<TransactionsPage />)
-
-    expect(await screen.findByText('ยังไม่มีรายการ')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'เพิ่มรายการ' }))
+    renderPage(<TransactionsPage />, '/?action=new')
 
     expect(
-      screen.getByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
+      await screen.findByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('จำนวนเงิน (บาท)')).toHaveAttribute(
       'inputmode',
       'decimal',
     )
+    await screen.findByRole('option', { name: 'บัตรตัวอย่าง •••• 1234' })
     fireEvent.change(screen.getAllByLabelText('วิธีชำระ')[1]!, {
       target: { value: 'credit_card' },
     })
@@ -81,6 +79,69 @@ describe('finance pages', () => {
     expect(
       screen.getAllByRole('option', { name: 'บัตรตัวอย่าง •••• 1234' }),
     ).toHaveLength(2)
+  })
+
+  it('applies combined transaction filters and clears them', async () => {
+    stubFinanceFetch({
+      cards: [fictionalCard],
+      categories: [
+        {
+          direction: 'expense',
+          id: '11111111-1111-4111-8111-111111111111',
+          isActive: true,
+          name: 'อาหารสมมติ',
+        },
+      ],
+      transactions: [],
+    })
+    renderPage(<TransactionsPage />)
+
+    expect(await screen.findByText('ยังไม่มีรายการ')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'ทั้งหมด' })).toBeChecked()
+    expect(screen.getByText('เงื่อนไขที่ใช้ · 1')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'ค้นหา' }), {
+      target: { value: 'กลางวัน' },
+    })
+    fireEvent.click(screen.getByRole('radio', { name: 'รายจ่าย' }))
+    fireEvent.click(screen.getByText('ตัวกรองเพิ่มเติม · 1'))
+    fireEvent.change(screen.getByLabelText('หมวดหมู่'), {
+      target: { value: '11111111-1111-4111-8111-111111111111' },
+    })
+    fireEvent.change(screen.getByLabelText('วิธีชำระ'), {
+      target: { value: 'cash' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'กรองรายการ' }))
+
+    await waitFor(() => {
+      const request = vi.mocked(fetch).mock.calls.find(([input]) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url
+        if (!url.includes('/api/transactions?')) return false
+        const params = new URL(url, 'http://localhost').searchParams
+        return (
+          params.get('page') === '1' &&
+          params.get('search') === 'กลางวัน' &&
+          params.get('direction') === 'expense' &&
+          params.get('categoryId') === '11111111-1111-4111-8111-111111111111' &&
+          params.get('paymentMethod') === 'cash'
+        )
+      })
+      expect(request).toBeDefined()
+    })
+    expect(screen.getByText('เงื่อนไขที่ใช้ · 5')).toBeInTheDocument()
+    expect(
+      screen.getByText(/กลางวัน.*รายจ่าย.*อาหารสมมติ.*ใช้งาน.*เงินสด/),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'ล้างตัวกรอง' }))
+    expect(screen.getByRole('radio', { name: 'ทั้งหมด' })).toBeChecked()
+    expect(screen.getByRole('searchbox', { name: 'ค้นหา' })).toHaveValue('')
+    expect(screen.getByText('เงื่อนไขที่ใช้ · 1')).toBeInTheDocument()
   })
 
   it('opens the transaction form from the global quick-add URL', async () => {
@@ -99,8 +160,6 @@ describe('finance pages', () => {
     ['/credit-cards?view=history#statements', 'cancel', 'เพิ่มรายการด่วน'],
     ['/installments', 'save', 'เพิ่มรายการด่วน'],
     ['/transactions', 'save', 'เพิ่มรายการด่วน'],
-    ['/credit-cards?view=history#statements', 'cancel', 'เพิ่มรายการ'],
-    ['/installments', 'save', 'เพิ่มรายการ'],
   ])('%s: %s via %s', async (origin, action, link) => {
     stubFinanceFetch({
       categories: [
