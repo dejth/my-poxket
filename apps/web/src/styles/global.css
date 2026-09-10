@@ -940,6 +940,37 @@ summary:focus-visible {
   gap: var(--space-4);
 }
 
+.category-items .credit-card-item {
+  align-items: start;
+  padding-block: var(--space-4);
+}
+
+.credit-card-details > .status-label {
+  width: fit-content;
+  margin-top: var(--space-1);
+}
+
+.credit-card-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.credit-card-rules dt,
+.credit-card-rules dd {
+  margin: 0;
+  font-size: var(--font-label);
+}
+
+.credit-card-rules dt {
+  color: var(--color-muted);
+}
+
+.credit-card-rules dd {
+  font-weight: 650;
+}
+
 .statement-section {
   margin-top: var(--space-6);
 }
@@ -1169,7 +1200,7 @@ summary:focus-visible {
 
 .statement-dates {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--space-3);
   margin: 1rem 0 0;
 }
@@ -1588,6 +1619,15 @@ summary:focus-visible {
 .status-label.stopped {
   color: var(--color-muted);
   background: var(--color-neutral-soft);
+}
+
+.status-label.unpaid {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.statement-card > .status-label {
+  margin-top: var(--space-2);
 }
 
 .row-actions {
@@ -2147,7 +2187,8 @@ body:has(dialog[open]) {
     flex-wrap: wrap;
   }
   .statement-dates,
-  .card-rule-grid {
+  .card-rule-grid,
+  .credit-card-rules {
     grid-template-columns: 1fr;
   }
   .pagination-row {

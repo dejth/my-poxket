@@ -756,8 +756,15 @@ describe('finance pages', () => {
   })
 
   it('shows card rules and keeps official and planned payment dates distinct', async () => {
+    const inactiveCard = {
+      ...fictionalCard,
+      id: '44444444-4444-4444-8444-444444444444',
+      isActive: false,
+      maskedSuffix: '5678',
+      name: 'บัตรเก่า',
+    }
     stubFinanceFetch({
-      cards: [fictionalCard],
+      cards: [fictionalCard, inactiveCard],
       categories: [],
       statements: [
         {
@@ -766,9 +773,25 @@ describe('finance pages', () => {
           cardName: fictionalCard.name,
           maskedSuffix: fictionalCard.maskedSuffix,
           officialDueDate: '2026-10-01',
+          paidAmountMinor: null,
+          paidDate: null,
           plannedPaymentDate: '2026-09-30',
           purchaseCount: 1,
           statementEndDate: '2026-09-17',
+          status: 'unpaid',
+        },
+        {
+          amountMinor: '25000',
+          cardId: inactiveCard.id,
+          cardName: inactiveCard.name,
+          maskedSuffix: inactiveCard.maskedSuffix,
+          officialDueDate: '2026-09-01',
+          paidAmountMinor: '25000',
+          paidDate: '2026-08-30',
+          plannedPaymentDate: '2026-08-30',
+          purchaseCount: 2,
+          statementEndDate: '2026-08-17',
+          status: 'paid',
         },
       ],
       transactions: [],
@@ -776,10 +799,16 @@ describe('finance pages', () => {
     renderPage(<CreditCardsPage />)
 
     expect(
-      await screen.findByText('สรุปวันที่ 17 · ครบกำหนดวันที่ 1 · ใช้งานอยู่'),
+      await screen.findAllByText('บัตรตัวอย่าง •••• 1234'),
+    ).not.toHaveLength(0)
+    expect(screen.getByText('ใช้งานอยู่')).toBeInTheDocument()
+    expect(
+      screen.getByText('ปิดใช้งาน', { selector: '.status-label' }),
     ).toBeInTheDocument()
-    expect(screen.getAllByText('1 ต.ค. 2569')).toHaveLength(2)
-    expect(screen.getAllByText('30 ก.ย. 2569')).toHaveLength(2)
+    expect(screen.getAllByText('กำหนดชำระตามบัตร')).toHaveLength(3)
+    expect(screen.getAllByText('วันที่วางแผนชำระ')).toHaveLength(3)
+    expect(screen.getAllByText('ยังไม่จ่าย')).toHaveLength(2)
+    expect(screen.getAllByText('จ่ายแล้ว')).toHaveLength(2)
     expect(screen.getAllByText('฿700.00')).toHaveLength(2)
   })
 
