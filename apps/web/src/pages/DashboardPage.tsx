@@ -82,6 +82,14 @@ export function DashboardPage() {
     },
   })
   const summary = summaryQuery.data
+  const expenseCategories =
+    summary?.activity.categories.filter(
+      (category) => category.direction === 'expense',
+    ) ?? []
+  const incomeCategories =
+    summary?.activity.categories.filter(
+      (category) => category.direction === 'income',
+    ) ?? []
 
   useEffect(() => {
     const dialog = paymentDialogRef.current
@@ -258,29 +266,38 @@ export function DashboardPage() {
             >
               <div className="section-heading">
                 <div>
-                  <h2 id="categories-title">แยกตามหมวดหมู่</h2>
-                  <p>รวมจากรายการที่ยังใช้งานอยู่</p>
+                  <h2 id="categories-title">สัดส่วนรายจ่าย</h2>
+                  <p>เทียบกับรายจ่ายทั้งหมดในเดือนที่เลือก</p>
                 </div>
               </div>
-              {summary.activity.categories.length === 0 ? (
-                <p className="muted-state">ยังไม่มีกิจกรรมในเดือนนี้</p>
+              {expenseCategories.length === 0 ||
+              BigInt(summary.activity.expenseMinor) === 0n ? (
+                <p className="muted-state">ยังไม่มีรายจ่ายในเดือนนี้</p>
               ) : (
-                <ul className="dashboard-list category-breakdown">
-                  {summary.activity.categories.map((category) => (
-                    <li key={`${category.direction}:${category.categoryId}`}>
-                      <div>
-                        <strong>{category.categoryName}</strong>
-                        <small>
-                          {category.direction === 'income'
-                            ? 'รายรับ'
-                            : 'รายจ่าย'}
-                        </small>
-                      </div>
-                      <strong>{formatThbMinor(category.amountMinor)}</strong>
-                    </li>
+                <ul className="dashboard-list category-proportions">
+                  {expenseCategories.map((category) => (
+                    <CategoryProportion
+                      amountMinor={category.amountMinor}
+                      key={category.categoryId}
+                      name={category.categoryName}
+                      totalMinor={summary.activity.expenseMinor}
+                    />
                   ))}
                 </ul>
               )}
+              {incomeCategories.length > 0 ? (
+                <div className="income-categories">
+                  <h3>รายรับตามหมวดหมู่</h3>
+                  <ul className="dashboard-list category-breakdown">
+                    {incomeCategories.map((category) => (
+                      <li key={category.categoryId}>
+                        <strong>{category.categoryName}</strong>
+                        <strong>{formatThbMinor(category.amountMinor)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
 
             <section
@@ -458,6 +475,33 @@ export function DashboardPage() {
   )
 }
 
+function CategoryProportion({
+  amountMinor,
+  name,
+  totalMinor,
+}: {
+  readonly amountMinor: string
+  readonly name: string
+  readonly totalMinor: string
+}) {
+  const percentageTenths =
+    (BigInt(amountMinor) * 1000n + BigInt(totalMinor) / 2n) / BigInt(totalMinor)
+  const percentage = Number(percentageTenths) / 10
+
+  return (
+    <li>
+      <div className="category-proportion-summary">
+        <strong>{name}</strong>
+        <span>{formatPercentage(percentageTenths)}</span>
+      </div>
+      <strong>{formatThbMinor(amountMinor)}</strong>
+      <div className="category-proportion-track" aria-hidden="true">
+        <span style={{ width: `${percentage}%` }} />
+      </div>
+    </li>
+  )
+}
+
 function RecentTransactionItem({ item }: { readonly item: TransactionData }) {
   return (
     <li>
@@ -617,4 +661,10 @@ function formatThaiPeriod(period: string) {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
   }).format(new Date(`${period}-01T00:00:00+07:00`))
+}
+
+function formatPercentage(tenths: bigint) {
+  return tenths % 10n === 0n
+    ? `${tenths / 10n}%`
+    : `${tenths / 10n}.${tenths % 10n}%`
 }

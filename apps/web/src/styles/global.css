@@ -520,6 +520,58 @@ summary:focus-visible {
   gap: 0.2rem;
 }
 
+.category-proportions li {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-4);
+}
+
+.category-proportion-summary {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.category-proportion-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.category-proportion-summary span,
+.category-proportions li > strong {
+  flex: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-proportion-track {
+  height: 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-soft);
+  grid-column: 1 / -1;
+  overflow: hidden;
+}
+
+.category-proportion-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+}
+
+.income-categories {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.income-categories h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-body);
+}
+
 .dashboard-item-main > strong,
 .category-breakdown li > strong {
   white-space: nowrap;
