@@ -123,3 +123,21 @@ it('reserves a status column beside long card headings', () => {
     style.remove()
   }
 })
+
+it('keeps the filter primary action content-sized', () => {
+  const style = document.createElement('style')
+  style.textContent = css
+  document.head.append(style)
+  const filterActions = document.createElement('div')
+  filterActions.className = 'filter-actions'
+  const applyFilter = document.createElement('button')
+  applyFilter.className = 'primary-button'
+  filterActions.append(applyFilter)
+  document.body.append(filterActions)
+  try {
+    expect(getComputedStyle(applyFilter).width).toBe('auto')
+  } finally {
+    filterActions.remove()
+    style.remove()
+  }
+})
