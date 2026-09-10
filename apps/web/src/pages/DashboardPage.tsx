@@ -440,18 +440,29 @@ function PayableItem({
       <div className="dashboard-item-main">
         <div>
           <strong>{item.title}</strong>
-          <small>{item.context}</small>
         </div>
         <strong>{formatThbMinor(item.amountMinor)}</strong>
       </div>
       <div className="dashboard-item-meta">
+        <span className={`source-badge is-${item.source}`}>{item.context}</span>
         <span className={`payable-status is-${item.status}`}>
-          {item.status === 'overdue' ? 'เกินกำหนด' : 'ยังไม่จ่าย'}
+          {item.status === 'overdue' ? (
+            <>
+              <span aria-hidden="true">△</span> เกินกำหนด
+            </>
+          ) : (
+            'ยังไม่จ่าย'
+          )}
         </span>
-        <span>
-          {item.source === 'credit_card_statement' && item.officialDueDate
-            ? `วางแผน ${formatThaiDate(item.dueDate)} · ครบกำหนด ${formatThaiDate(item.officialDueDate)}`
-            : formatThaiDate(item.dueDate)}
+        <span className="dashboard-item-date">
+          {item.source === 'credit_card_statement' && item.officialDueDate ? (
+            <>
+              <span>วางแผน {formatThaiDate(item.dueDate)}</span>
+              <span>ครบกำหนด {formatThaiDate(item.officialDueDate)}</span>
+            </>
+          ) : (
+            <span>กำหนด {formatThaiDate(item.dueDate)}</span>
+          )}
         </span>
         {item.source === 'credit_card_statement' ? (
           <button
@@ -492,15 +503,24 @@ function HistoryItem({
       <div className="dashboard-item-main">
         <div>
           <strong>{item.title}</strong>
-          <small>{item.context}</small>
         </div>
         <strong>{formatThbMinor(item.amountMinor)}</strong>
       </div>
       <div className="dashboard-item-meta">
+        <span className={`source-badge is-${item.source}`}>{item.context}</span>
         <span className={`payable-status is-${item.status}`}>
-          {item.status === 'paid' ? 'จ่ายแล้ว' : 'ยกเลิก'}
+          {item.status === 'paid' ? (
+            <>
+              <span aria-hidden="true">✓</span> จ่ายแล้ว
+            </>
+          ) : (
+            'ยกเลิก'
+          )}
         </span>
-        <span>{formatThaiDate(item.date)}</span>
+        <span>
+          {item.status === 'paid' ? 'จ่าย' : 'ยกเลิก'}{' '}
+          {formatThaiDate(item.date)}
+        </span>
         {item.source === 'credit_card_statement' && item.status === 'paid' ? (
           <button
             className="text-button"
