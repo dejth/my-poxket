@@ -6,9 +6,11 @@ import { Link } from 'react-router-dom'
 import { ActionNotice } from '../app/ActionNotice'
 import {
   getDashboardSummary,
+  getTransactions,
   setCreditCardStatementPayment,
   type DashboardHistoryData,
   type DashboardPayableData,
+  type TransactionData,
 } from '../app/api'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 import {
@@ -33,6 +35,17 @@ export function DashboardPage() {
   const summaryQuery = useQuery({
     queryFn: () => getDashboardSummary(session.csrfToken, period),
     queryKey: ['dashboard-summary', period],
+  })
+  const recentTransactionsQuery = useQuery({
+    enabled: summaryQuery.data?.period === period,
+    queryFn: () =>
+      getTransactions({
+        dateFrom: summaryQuery.data!.periodStart,
+        dateTo: summaryQuery.data!.periodEnd,
+        pageSize: 5,
+        status: 'active',
+      }),
+    queryKey: ['transactions', 'dashboard-recent', period],
   })
   const paymentMutation = useMutation({
     mutationFn: ({
@@ -195,6 +208,43 @@ export function DashboardPage() {
                         setPaidDate(today)
                       }}
                     />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          <section
+            className="dashboard-section"
+            aria-labelledby="recent-transactions-title"
+          >
+            <div className="section-heading dashboard-section-heading">
+              <div>
+                <p className="eyebrow">ตามวันที่ทำรายการ</p>
+                <h2 id="recent-transactions-title">รายการล่าสุดในเดือนนี้</h2>
+              </div>
+              <Link className="dashboard-item-link" to="/transactions">
+                ดูทั้งหมด
+              </Link>
+            </div>
+            <div className="surface dashboard-panel">
+              {recentTransactionsQuery.isPending ? (
+                <p className="muted-state" aria-busy="true" role="status">
+                  กำลังโหลดรายการล่าสุด…
+                </p>
+              ) : recentTransactionsQuery.isError ? (
+                <QueryError
+                  message={recentTransactionsQuery.error.message}
+                  onRetry={() => {
+                    void recentTransactionsQuery.refetch()
+                  }}
+                />
+              ) : recentTransactionsQuery.data.items.length === 0 ? (
+                <p className="muted-state">ยังไม่มีรายการในเดือนนี้</p>
+              ) : (
+                <ul className="dashboard-list">
+                  {recentTransactionsQuery.data.items.map((item) => (
+                    <RecentTransactionItem item={item} key={item.id} />
                   ))}
                 </ul>
               )}
@@ -405,6 +455,26 @@ export function DashboardPage() {
         </dialog>
       ) : null}
     </main>
+  )
+}
+
+function RecentTransactionItem({ item }: { readonly item: TransactionData }) {
+  return (
+    <li>
+      <div className="dashboard-item-main">
+        <strong>{item.description}</strong>
+        <strong className={item.direction}>
+          {item.direction === 'expense' ? '−' : '+'}
+          {formatThbMinor(item.amountMinor)}
+        </strong>
+      </div>
+      <div className="dashboard-item-meta">
+        <span>
+          {formatThaiDate(item.transactionDate)} · {item.categoryName} ·{' '}
+          {item.direction === 'income' ? 'รายรับ' : 'รายจ่าย'}
+        </span>
+      </div>
+    </li>
   )
 }
 

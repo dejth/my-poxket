@@ -293,7 +293,26 @@ describe('finance pages', () => {
         throughDate: '2026-10-31',
         today: '2026-09-20',
       },
-      transactions: [],
+      transactions: [
+        {
+          amountMinor: '150000',
+          categoryDirection: 'expense',
+          categoryId: '11111111-1111-4111-8111-111111111111',
+          categoryName: 'อาหารสมมติ',
+          creditCardId: null,
+          creditCardMaskedSuffix: null,
+          creditCardName: null,
+          correctsTransactionId: null,
+          createdAt: '2026-09-07T03:00:00.000Z',
+          description: 'อาหารกลางวันสมมติ',
+          direction: 'expense',
+          id: 'transaction:recent',
+          paymentMethod: 'cash',
+          status: 'active',
+          transactionDate: '2026-09-07',
+          updatedAt: '2026-09-07T03:00:00.000Z',
+        },
+      ],
     })
     renderPage(<DashboardPage />)
 
@@ -324,10 +343,17 @@ describe('finance pages', () => {
     expect(screen.getByText('จ่ายแล้ว')).toBeInTheDocument()
     expect(screen.getByText('ยกเลิก')).toBeInTheDocument()
     expect(screen.getByText('บริการสมมติที่ยกเลิก')).toBeInTheDocument()
+    expect(await screen.findByText('อาหารกลางวันสมมติ')).toBeInTheDocument()
+    expect(screen.getByText('−฿1,500.00')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ดูทั้งหมด' })).toHaveAttribute(
+      'href',
+      '/transactions',
+    )
 
     const headings = [
       'กิจกรรมเดือน กันยายน 2569',
       'ยอดที่ต้องจ่าย',
+      'รายการล่าสุดในเดือนนี้',
       'แยกตามหมวดหมู่',
       'กระแสเงินสด',
       'ประวัติเดือนนี้',
@@ -372,6 +398,70 @@ describe('finance pages', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText('ยังไม่มีประวัติการจ่ายหรือยกเลิกในเดือนนี้'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText('ยังไม่มีรายการในเดือนนี้'),
+    ).toBeInTheDocument()
+  })
+
+  it('retries recent transactions without hiding the loaded summary', async () => {
+    const fetch = vi.fn((input: string | URL | Request) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url
+      if (url.includes('/api/dashboard-summary')) {
+        return Promise.resolve(
+          new Response(JSON.stringify(emptyDashboardSummary()), {
+            headers: { 'content-type': 'application/json' },
+            status: 200,
+          }),
+        )
+      }
+      const recentAttempts = fetch.mock.calls.filter(([request]) => {
+        const requestUrl =
+          typeof request === 'string'
+            ? request
+            : request instanceof URL
+              ? request.href
+              : request.url
+        return requestUrl.includes('/api/transactions')
+      }).length
+      return Promise.resolve(
+        new Response(
+          recentAttempts === 1
+            ? JSON.stringify({
+                error: { message: 'โหลดรายการล่าสุดไม่สำเร็จ' },
+              })
+            : JSON.stringify({ items: [], nextPage: null }),
+          {
+            headers: { 'content-type': 'application/json' },
+            status: recentAttempts === 1 ? 503 : 200,
+          },
+        ),
+      )
+    })
+    vi.stubGlobal('fetch', fetch)
+    renderPage(<DashboardPage />)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'กิจกรรมเดือน กันยายน 2569',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText('โหลดรายการล่าสุดไม่สำเร็จ'),
+    ).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/transactions?dateFrom=2026-09-01&dateTo=2026-09-30&pageSize=5&status=active',
+      { credentials: 'include' },
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'ลองอีกครั้ง' }))
+    expect(
+      await screen.findByText('ยังไม่มีรายการในเดือนนี้'),
     ).toBeInTheDocument()
   })
 
