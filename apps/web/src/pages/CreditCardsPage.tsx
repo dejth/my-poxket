@@ -232,15 +232,27 @@ export function CreditCardsPage() {
           ) : (
             <ul className="category-items card-items">
               {cards.map((card) => (
-                <li key={card.id}>
-                  <div>
+                <li className="credit-card-item" key={card.id}>
+                  <div className="credit-card-details">
                     <strong>{formatCardName(card)}</strong>
-                    <small>
-                      สรุปวันที่ {card.cutoffDay} · ครบกำหนดวันที่ {card.dueDay}{' '}
-                      · {card.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}
-                    </small>
+                    <span
+                      className={`status-label ${card.isActive ? '' : 'stopped'}`}
+                    >
+                      {card.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}
+                    </span>
+                    <dl className="credit-card-rules">
+                      <div>
+                        <dt>วันสรุปยอด</dt>
+                        <dd>วันที่ {card.cutoffDay}</dd>
+                      </div>
+                      <div>
+                        <dt>วันครบกำหนดตามบัตร</dt>
+                        <dd>วันที่ {card.dueDay}</dd>
+                      </div>
+                    </dl>
                   </div>
                   <button
+                    aria-label={`${card.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} ${formatCardName(card)}`}
                     className="small-button"
                     disabled={statusMutation.isPending}
                     onClick={() => {
@@ -368,13 +380,15 @@ function StatementLists({
     <>
       <div className="desktop-transaction-table statement-table">
         <table>
+          <caption className="sr-only">รอบบัญชีบัตรเครดิต</caption>
           <thead>
             <tr>
               <th>บัตร</th>
               <th>วันสรุปยอด</th>
-              <th>ครบกำหนด</th>
-              <th>วางแผนชำระ</th>
+              <th>กำหนดชำระตามบัตร</th>
+              <th>วันที่วางแผนชำระ</th>
               <th>รายการ</th>
+              <th>สถานะ</th>
               <th className="amount-cell">ยอดรวม</th>
             </tr>
           </thead>
@@ -386,6 +400,9 @@ function StatementLists({
                 <td>{formatThaiDate(statement.officialDueDate)}</td>
                 <td>{formatThaiDate(statement.plannedPaymentDate)}</td>
                 <td>{statement.purchaseCount}</td>
+                <td>
+                  <StatementStatus status={statement.status} />
+                </td>
                 <td className="amount-cell expense">
                   {formatThbMinor(statement.amountMinor)}
                 </td>
@@ -401,21 +418,23 @@ function StatementLists({
             key={`${statement.cardId}:${statement.statementEndDate}`}
           >
             <div className="transaction-card-main">
-              <div>
-                <h2>{formatCardName(statement)}</h2>
-                <p>สรุปยอด {formatThaiDate(statement.statementEndDate)}</p>
-              </div>
+              <h2>{formatCardName(statement)}</h2>
               <strong className="expense">
                 {formatThbMinor(statement.amountMinor)}
               </strong>
             </div>
+            <StatementStatus status={statement.status} />
             <dl className="statement-dates">
               <div>
-                <dt>ครบกำหนด</dt>
+                <dt>วันสรุปยอด</dt>
+                <dd>{formatThaiDate(statement.statementEndDate)}</dd>
+              </div>
+              <div>
+                <dt>กำหนดชำระตามบัตร</dt>
                 <dd>{formatThaiDate(statement.officialDueDate)}</dd>
               </div>
               <div>
-                <dt>วางแผนชำระ</dt>
+                <dt>วันที่วางแผนชำระ</dt>
                 <dd>{formatThaiDate(statement.plannedPaymentDate)}</dd>
               </div>
               <div>
@@ -427,6 +446,20 @@ function StatementLists({
         ))}
       </div>
     </>
+  )
+}
+
+function StatementStatus({
+  status,
+}: {
+  readonly status: CreditCardStatementData['status']
+}) {
+  return (
+    <span
+      className={`status-label ${status === 'paid' ? 'settled' : 'unpaid'}`}
+    >
+      {status === 'paid' ? 'จ่ายแล้ว' : 'ยังไม่จ่าย'}
+    </span>
   )
 }
 
