@@ -58,7 +58,15 @@ describe('finance pages', () => {
 
   it('renders responsive transaction semantics and opens the focused form', async () => {
     stubFinanceFetch({
-      cards: [fictionalCard],
+      cards: [
+        fictionalCard,
+        {
+          ...fictionalCard,
+          id: '44444444-4444-4444-8444-444444444444',
+          isActive: false,
+          name: 'บัตรที่ปิดใช้งาน',
+        },
+      ],
       categories: [],
       transactions: [],
     })
@@ -67,18 +75,34 @@ describe('finance pages', () => {
     expect(
       await screen.findByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText('จำนวนเงิน (บาท)')).toHaveAttribute(
-      'inputmode',
-      'decimal',
+    const amountInput = screen.getByLabelText('จำนวนเงิน (บาท)')
+    expect(amountInput).toHaveAttribute('inputmode', 'decimal')
+    expect(amountInput).toHaveAttribute('autocomplete', 'off')
+    expect(screen.getByLabelText('วันที่รายการ')).toHaveAttribute(
+      'type',
+      'date',
     )
+    expect(
+      amountInput.compareDocumentPosition(
+        within(
+          screen.getByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
+        ).getByRole('radio', { name: 'รายจ่าย' }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     await screen.findByRole('option', { name: 'บัตรตัวอย่าง •••• 1234' })
     fireEvent.change(screen.getAllByLabelText('วิธีชำระ')[1]!, {
       target: { value: 'credit_card' },
+    })
+    const dialog = screen.getByRole('dialog', {
+      name: 'เพิ่มรายรับหรือรายจ่าย',
     })
     expect(screen.getAllByLabelText('บัตรเครดิต')).toHaveLength(2)
     expect(
       screen.getAllByRole('option', { name: 'บัตรตัวอย่าง •••• 1234' }),
     ).toHaveLength(2)
+    expect(
+      within(dialog).queryByRole('option', { name: /บัตรที่ปิดใช้งาน/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('applies combined transaction filters and clears them', async () => {
@@ -146,13 +170,71 @@ describe('finance pages', () => {
 
   it('opens the transaction form from the global quick-add URL', async () => {
     stubFinanceFetch({ categories: [], transactions: [] })
-    renderPage(<TransactionsPage />, '/?action=new')
+    const { router } = renderPage(
+      <TransactionsPage />,
+      '/transactions?action=new',
+    )
 
     expect(
       await screen.findByRole('dialog', { name: 'เพิ่มรายรับหรือรายจ่าย' }),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/transactions')
+    expect(router.state.location.search).toBe('')
+  })
+
+  it('retains entered values when saving fails', async () => {
+    stubFinanceFetch({
+      categories: [
+        {
+          direction: 'expense',
+          id: '11111111-1111-4111-8111-111111111111',
+          isActive: true,
+          name: 'อาหารสมมติ',
+        },
+      ],
+      transactions: [],
+    })
+    const successfulFetch = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input, init) =>
+      init?.method === 'POST'
+        ? Promise.resolve(
+            new Response(JSON.stringify({ message: 'บันทึกไม่สำเร็จ' }), {
+              headers: { 'content-type': 'application/json' },
+              status: 503,
+            }),
+          )
+        : successfulFetch(input, init),
+    )
+    renderPage(<TransactionsPage />, '/transactions?action=new')
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'เพิ่มรายรับหรือรายจ่าย',
+    })
+    await within(dialog).findByRole('option', { name: 'อาหารสมมติ' })
+    fireEvent.change(within(dialog).getByLabelText('จำนวนเงิน (บาท)'), {
+      target: { value: '125.50' },
+    })
+    fireEvent.change(within(dialog).getByLabelText('รายละเอียด'), {
+      target: { value: 'รายการที่ต้องเก็บค่าไว้' },
+    })
+    fireEvent.change(within(dialog).getByLabelText('หมวดหมู่'), {
+      target: { value: '11111111-1111-4111-8111-111111111111' },
+    })
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'บันทึกรายการ' }),
+    )
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'ไม่สามารถดำเนินการได้',
+    )
+    expect(within(dialog).getByLabelText('จำนวนเงิน (บาท)')).toHaveValue(
+      '125.50',
+    )
+    expect(within(dialog).getByLabelText('รายละเอียด')).toHaveValue(
+      'รายการที่ต้องเก็บค่าไว้',
+    )
   })
 
   it('keeps long amounts, history statuses, and named actions accessible', async () => {
@@ -214,6 +296,7 @@ describe('finance pages', () => {
 
   it.each([
     ['/', 'cancel', 'เพิ่มรายการด่วน'],
+    ['/categories?view=active#list', 'escape', 'เพิ่มรายการด่วน'],
     ['/credit-cards?view=history#statements', 'cancel', 'เพิ่มรายการด่วน'],
     ['/installments', 'save', 'เพิ่มรายการด่วน'],
     ['/transactions', 'save', 'เพิ่มรายการด่วน'],
@@ -233,6 +316,11 @@ describe('finance pages', () => {
       defaultOptions: { queries: { retry: false } },
     })
     queryClient.setQueryData(['dashboard-summary', '2026-09'], {})
+    queryClient.setQueryData(
+      ['transactions', 'dashboard-recent', '2026-09'],
+      {},
+    )
+    queryClient.setQueryData(['credit-card-statements'], {})
     const router = createMemoryRouter(
       [
         {
@@ -262,6 +350,8 @@ describe('finance pages', () => {
     })
     if (action === 'cancel') {
       fireEvent.click(within(dialog).getByRole('button', { name: 'ยกเลิก' }))
+    } else if (action === 'escape') {
+      fireEvent(dialog, new Event('cancel', { cancelable: true }))
     } else {
       await within(dialog).findByRole('option', { name: 'อาหารสมมติ' })
       fireEvent.change(within(dialog).getByLabelText('จำนวนเงิน (บาท)'), {
@@ -286,10 +376,12 @@ describe('finance pages', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     )
     if (action === 'save')
-      expect(
-        queryClient.getQueryState(['dashboard-summary', '2026-09'])
-          ?.isInvalidated,
-      ).toBe(true)
+      for (const key of [
+        ['dashboard-summary', '2026-09'],
+        ['transactions', 'dashboard-recent', '2026-09'],
+        ['credit-card-statements'],
+      ])
+        expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true)
   })
 
   it('shows active and inactive categories without hiding history', async () => {
@@ -905,7 +997,10 @@ function renderPage(page: ReactNode, initialEntry = '/') {
   const router = createMemoryRouter(
     [
       {
-        children: [{ element: page, index: true }],
+        children: [
+          { element: page, index: true },
+          { element: page, path: 'transactions' },
+        ],
         element: <Outlet context={{ session }} />,
         path: '/',
       },
@@ -913,11 +1008,15 @@ function renderPage(page: ReactNode, initialEntry = '/') {
     { initialEntries: [initialEntry] },
   )
 
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
-  )
+  return {
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    ),
+    queryClient,
+    router,
+  }
 }
 
 function stubFinanceFetch({
