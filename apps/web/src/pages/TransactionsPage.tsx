@@ -834,11 +834,11 @@ function TransactionTable({
   return (
     <div className="desktop-transaction-table">
       <table>
+        <caption className="sr-only">รายการรายรับและรายจ่าย</caption>
         <thead>
           <tr>
             <th>วันที่</th>
-            <th>รายละเอียด</th>
-            <th>หมวดหมู่</th>
+            <th>รายละเอียดและหมวดหมู่</th>
             <th>วิธีชำระ</th>
             <th>สถานะ</th>
             <th className="amount-cell">จำนวนเงิน</th>
@@ -849,8 +849,13 @@ function TransactionTable({
           {items.map((item) => (
             <tr key={item.id}>
               <td>{formatThaiDate(item.transactionDate)}</td>
-              <td>{item.description}</td>
-              <td>{item.categoryName}</td>
+              <td>
+                <strong>{item.description}</strong>
+                <span>
+                  {item.direction === 'expense' ? 'รายจ่าย' : 'รายรับ'} ·{' '}
+                  {item.categoryName}
+                </span>
+              </td>
               <td>{formatPayment(item)}</td>
               <td>
                 <StatusLabel status={item.status} />
@@ -884,26 +889,27 @@ function TransactionCards({
       {items.map((item) => (
         <article className="transaction-card" key={item.id}>
           <div className="transaction-card-main">
-            <div>
-              <h2>{item.description}</h2>
-              <p>
-                {formatThaiDate(item.transactionDate)} · {item.categoryName}
-              </p>
-            </div>
+            <h2>{item.description}</h2>
             <strong className={item.direction}>
               {item.direction === 'expense' ? '−' : '+'}
               {formatThbMinor(item.amountMinor)}
             </strong>
           </div>
-          <div className="transaction-card-meta">
-            <span>{formatPayment(item)}</span>
+          <p className="transaction-card-meta">
+            {item.direction === 'expense' ? 'รายจ่าย' : 'รายรับ'} ·{' '}
+            {item.categoryName} · {formatPayment(item)}
+          </p>
+          <div className="transaction-card-status">
+            <span>{formatThaiDate(item.transactionDate)}</span>
             <StatusLabel status={item.status} />
+          </div>
+          {item.status === 'active' ? (
             <TransactionActions
               item={item}
               onCancel={onCancel}
               onCorrect={onCorrect}
             />
-          </div>
+          ) : null}
         </article>
       ))}
     </div>
@@ -925,6 +931,7 @@ function TransactionActions({
   return (
     <div className="row-actions">
       <button
+        aria-label={`แก้ไขรายการ ${item.description}`}
         className="text-button"
         onClick={() => onCorrect(item)}
         type="button"
@@ -932,6 +939,7 @@ function TransactionActions({
         แก้ไข
       </button>
       <button
+        aria-label={`ยกเลิกรายการ ${item.description}`}
         className="text-button danger"
         onClick={() => onCancel(item)}
         type="button"

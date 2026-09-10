@@ -155,6 +155,63 @@ describe('finance pages', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  it('keeps long amounts, history statuses, and named actions accessible', async () => {
+    const baseTransaction = {
+      amountMinor: '99999999999',
+      categoryDirection: 'expense',
+      categoryId: '11111111-1111-4111-8111-111111111111',
+      categoryName: 'หมวดหมู่สมมติชื่อยาวมากสำหรับตรวจการตัดบรรทัด',
+      creditCardId: null,
+      creditCardMaskedSuffix: null,
+      creditCardName: null,
+      correctsTransactionId: null,
+      createdAt: '2026-09-07T03:00:00.000Z',
+      direction: 'expense',
+      paymentMethod: 'cash',
+      transactionDate: '2026-09-07',
+      updatedAt: '2026-09-07T03:00:00.000Z',
+    }
+    stubFinanceFetch({
+      categories: [],
+      transactions: [
+        {
+          ...baseTransaction,
+          description: 'รายละเอียดรายการสมมติที่ยาวมากและต้องไม่ชนกับจำนวนเงิน',
+          id: 'transaction:active',
+          status: 'active',
+        },
+        {
+          ...baseTransaction,
+          description: 'รายการที่ยกเลิก',
+          id: 'transaction:cancelled',
+          status: 'cancelled',
+        },
+        {
+          ...baseTransaction,
+          description: 'รายการที่ถูกแก้ไข',
+          id: 'transaction:superseded',
+          status: 'superseded',
+        },
+      ],
+    })
+    renderPage(<TransactionsPage />)
+
+    const table = await screen.findByRole('table', {
+      name: 'รายการรายรับและรายจ่าย',
+    })
+    expect(within(table).getAllByText('−฿999,999,999.99')).toHaveLength(3)
+    expect(screen.getAllByText('รายการที่ยกเลิก')).toHaveLength(2)
+    expect(screen.getAllByText('รายการที่ถูกแก้ไข')).toHaveLength(2)
+    expect(
+      screen.getAllByRole('button', {
+        name: 'แก้ไขรายการ รายละเอียดรายการสมมติที่ยาวมากและต้องไม่ชนกับจำนวนเงิน',
+      }),
+    ).toHaveLength(2)
+    expect(
+      screen.queryByRole('button', { name: 'แก้ไขรายการ รายการที่ยกเลิก' }),
+    ).not.toBeInTheDocument()
+  })
+
   it.each([
     ['/', 'cancel', 'เพิ่มรายการด่วน'],
     ['/credit-cards?view=history#statements', 'cancel', 'เพิ่มรายการด่วน'],
