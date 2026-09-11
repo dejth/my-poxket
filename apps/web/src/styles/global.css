@@ -1146,6 +1146,25 @@ summary:focus-visible {
   margin-top: var(--space-2);
 }
 
+.recurring-rule-card .current-installment-action .status-label {
+  width: fit-content;
+  margin-top: var(--space-1);
+}
+
+.recurring-impact-note {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  background: var(--color-neutral-soft);
+}
+
+.recurring-impact-note p {
+  margin: 0;
+  color: var(--color-muted);
+}
+
 .payment-dialog-sheet {
   width: min(100%, 28rem);
   min-height: auto;
