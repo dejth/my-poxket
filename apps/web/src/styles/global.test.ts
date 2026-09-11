@@ -96,6 +96,10 @@ describe('shared control accessibility', () => {
         expect(disabled.cursor, className).toBe('not-allowed')
         expect(disabled.opacity, className).toBe('1')
         expect(disabled.boxShadow, className).toBe('none')
+        if (className === 'small-button') {
+          expect(enabled.flex).toBe('0 0 auto')
+          expect(enabled.whiteSpace).toBe('nowrap')
+        }
       }
     } finally {
       container.remove()
