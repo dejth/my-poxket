@@ -124,12 +124,6 @@ export function CategoriesPage() {
             </p>
           ) : null}
 
-          {statusMutation.isError ? (
-            <p className="form-error" role="alert">
-              {statusMutation.error.message}
-            </p>
-          ) : null}
-
           <button
             className="primary-button"
             disabled={createMutation.isPending}
@@ -149,6 +143,12 @@ export function CategoriesPage() {
               <p>{categories.length} รายการ</p>
             </div>
           </div>
+
+          {statusMutation.isError ? (
+            <p className="inline-error" role="alert">
+              {statusMutation.error.message}
+            </p>
+          ) : null}
 
           {categoriesQuery.isPending ? (
             <p className="muted-state" aria-busy="true" role="status">
@@ -208,9 +208,13 @@ function CategoryGroup({
   }[]
   readonly onToggle: (id: string, isActive: boolean) => void
 }) {
+  const titleId = `category-group-${direction}`
   return (
-    <section>
-      <h3>{direction === 'expense' ? 'รายจ่าย' : 'รายรับ'}</h3>
+    <section aria-labelledby={titleId}>
+      <div className="category-group-heading">
+        <h3 id={titleId}>{direction === 'expense' ? 'รายจ่าย' : 'รายรับ'}</h3>
+        <span>{items.length} รายการ</span>
+      </div>
       {items.length === 0 ? (
         <p className="muted-copy">ยังไม่มีหมวดหมู่ประเภทนี้</p>
       ) : (
@@ -218,10 +222,15 @@ function CategoryGroup({
           {items.map((item) => (
             <li key={item.id}>
               <div>
-                <span>{item.name}</span>
-                <small>{item.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</small>
+                <strong className="category-item-name">{item.name}</strong>
+                <span
+                  className={`status-label ${item.isActive ? 'active' : 'stopped'}`}
+                >
+                  {item.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}
+                </span>
               </div>
               <button
+                aria-label={`${item.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}หมวดหมู่ ${item.name}`}
                 className="small-button"
                 disabled={isUpdating}
                 onClick={() => onToggle(item.id, !item.isActive)}
