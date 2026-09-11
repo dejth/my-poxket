@@ -50,6 +50,11 @@ describe('finance pages', () => {
       await screen.findByText('ยังไม่มีหมวดหมู่ เพิ่มรายการแรกได้เลย'),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'เพิ่มหมวดหมู่' }))
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'เพิ่มหมวดหมู่',
+      }),
+    )
     expect(await screen.findByText('กรุณาระบุชื่อหมวดหมู่')).toBeInTheDocument()
     const input = screen.getByRole('textbox')
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -821,6 +826,14 @@ describe('finance pages', () => {
     expect(screen.getAllByText('ยังไม่จ่าย')).toHaveLength(2)
     expect(screen.getAllByText('จ่ายแล้ว')).toHaveLength(2)
     expect(screen.getAllByText('฿700.00')).toHaveLength(2)
+    const add = screen.getByRole('button', { name: 'เพิ่มบัตร' })
+    add.focus()
+    fireEvent.click(add)
+    expect(
+      screen.getByRole('dialog', { name: 'เพิ่มบัตร' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
+    expect(add).toHaveFocus()
   })
 
   it('previews the installment end date and shows current paid state', async () => {
@@ -898,7 +911,7 @@ describe('finance pages', () => {
     fireEvent.click(screen.getByRole('button', { name: /^จ่ายแล้ว งวด 2\/2/ }))
     expect(screen.getByRole('dialog', { name: 'งวด 2/2' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
-    fireEvent.click(screen.getByRole('button', { name: '+ สร้างแผนผ่อน' }))
+    fireEvent.click(screen.getByRole('button', { name: 'สร้างแผนผ่อน' }))
     expect(
       screen.getByRole('dialog', { name: 'สร้างแผนผ่อน' }),
     ).toBeInTheDocument()

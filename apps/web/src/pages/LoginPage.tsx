@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 import type { LoginInput } from '../app/api'
+import { Logo } from '../app/Logo'
 
 const loginFormSchema = z.object({
   password: z.string().min(1, 'กรุณากรอกรหัสผ่าน'),
@@ -34,10 +35,7 @@ export function LoginPage({
     <main className="auth-shell">
       <section className="auth-card" aria-labelledby="login-title">
         <div className="brand-lockup" aria-label="My Poxket">
-          <span className="brand-mark" aria-hidden="true">
-            P
-          </span>
-          <span>My Poxket</span>
+          <Logo />
         </div>
 
         <header className="auth-heading">

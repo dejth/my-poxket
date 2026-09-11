@@ -71,6 +71,12 @@ describe('user management', () => {
     vi.stubGlobal('fetch', fetch)
     renderUsers()
     expect(await screen.findByText('Example Person')).toBeInTheDocument()
+    const add = screen.getByRole('button', { name: 'เพิ่มผู้ใช้' })
+    add.focus()
+    fireEvent.click(add)
+    expect(
+      screen.getByRole('dialog', { name: 'เพิ่มผู้ใช้' }),
+    ).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('ชื่อ'), {
       target: { value: 'New Person' },
     })
@@ -101,6 +107,8 @@ describe('user management', () => {
     )
     expect(await screen.findByText('บันทึกผู้ใช้แล้ว')).toBeInTheDocument()
     expect(password).toHaveValue('')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(add).toHaveFocus()
   })
 
   it('edits without sending a blank password and keeps input on a server error', async () => {
@@ -154,6 +162,7 @@ describe('user management', () => {
     vi.stubGlobal('fetch', fetch)
     renderUsers()
     await screen.findByText('Example Person')
+    fireEvent.click(screen.getByRole('button', { name: 'เพิ่มผู้ใช้' }))
     fireEvent.change(screen.getByLabelText('ชื่อ'), {
       target: { value: 'Example' },
     })

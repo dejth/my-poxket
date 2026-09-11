@@ -6,6 +6,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
 import { Modal } from '../app/Modal'
+import { Icon } from '../app/Icon'
 import { ActionNotice } from '../app/ActionNotice'
 import {
   createRecurringExpense,
@@ -218,7 +219,7 @@ export function RecurringExpensesPage() {
           onClick={openCreate}
           type="button"
         >
-          + เพิ่มรายการประจำ
+          <Icon name="plus-lg" /> เพิ่มรายการประจำ
         </button>
       </header>
 
@@ -288,7 +289,7 @@ export function RecurringExpensesPage() {
                 onClick={() => setIsFormOpen(false)}
                 type="button"
               >
-                ×
+                <Icon name="x-lg" />
               </button>
             </div>
             {editing ? (

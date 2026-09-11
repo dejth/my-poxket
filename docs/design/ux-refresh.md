@@ -14,26 +14,26 @@ This document specifies structural wireframes for `/` and `/transactions`; these
 
 Follow the [refresh plan](../plans/ux-refresh.md) and current code. The original reference images were not reopened during this task, so this specification does not claim pixel-perfect fidelity. Do not introduce reference-only features, dependencies, API changes, schema changes, or financial rules.
 
-## 2. Proposed design tokens
+## 2. Design tokens
 
-Retain existing token names where available. Add names only for shared values needed by #23–#24. These are proposed targets after approval, not changes already applied to the application.
+Retain shared token names and use them across components. The palette was refined in #61 while preserving the established financial-state meanings.
 
 | Token                    | Value                             | Use                                                        |
 | ------------------------ | --------------------------------- | ---------------------------------------------------------- |
-| `--color-canvas`         | `#F3F5F2`                         | Page background; unchanged                                 |
+| `--color-canvas`         | `#F4F8F6`                         | Page background                                            |
 | `--color-surface`        | `#FFFFFF`                         | Cards, forms, menus                                        |
-| `--color-ink`            | `#17241F`                         | Headings, amounts, primary text                            |
-| `--color-muted`          | `#58665E`                         | Dates, descriptions, secondary text                        |
-| `--color-border`         | `#D8DFDA`                         | Decorative dividers/borders; not the sole control boundary |
-| `--color-control-border` | `#77857D`                         | Visible input and secondary-button borders                 |
-| `--color-accent`         | `#176C55`                         | Primary actions, focus, income                             |
-| `--color-accent-strong`  | `#105440`                         | Primary-button hover/pressed state                         |
-| `--color-accent-soft`    | `#E8F3ED`                         | Success and selected-navigation backgrounds                |
-| `--color-warning`        | `#805600`                         | Unpaid obligations                                         |
-| `--color-warning-soft`   | `#FFF4D6`                         | Unpaid-state background                                    |
+| `--color-ink`            | `#15241F`                         | Headings, amounts, primary text                            |
+| `--color-muted`          | `#5B6C65`                         | Dates, descriptions, secondary text                        |
+| `--color-border`         | `#D9E5DF`                         | Decorative dividers/borders; not the sole control boundary |
+| `--color-control-border` | `#71847B`                         | Visible input and secondary-button borders                 |
+| `--color-accent`         | `#0F766E`                         | Primary actions, focus, income                             |
+| `--color-accent-strong`  | `#115E59`                         | Primary-button hover/pressed state                         |
+| `--color-accent-soft`    | `#E2F5EF`                         | Success and selected-navigation backgrounds                |
+| `--color-warning`        | `#7A5200`                         | Unpaid obligations                                         |
+| `--color-warning-soft`   | `#FFF3D1`                         | Unpaid-state background                                    |
 | `--color-error`          | `#A53D35`                         | Overdue, validation, destructive actions                   |
 | `--color-error-soft`     | `#FCECE9`                         | Error/overdue background                                   |
-| `--color-neutral-soft`   | `#EDF0EE`                         | Cancelled, stopped, superseded states                      |
+| `--color-neutral-soft`   | `#EDF3F0`                         | Cancelled, stopped, superseded states                      |
 | `--radius-sm`            | `12px`                            | Buttons and inputs                                         |
 | `--radius-lg`            | `20px`                            | Cards and dialogs                                          |
 | `--radius-pill`          | `999px`                           | Filter chips and status badges                             |
@@ -46,7 +46,7 @@ Keep the self-hosted font stack `'Anuphan Variable', ui-sans-serif, system-ui, s
 
 Use the existing `formatThbMinor`, for example `฿1,250.00` and `-฿250.00`. Do not add negative signs to expenses stored as positive values; identify direction with income/expense labels. Right-align amounts in rows and tables. Keep existing date formatters and Asia/Bangkok.
 
-Use 20px outline icons, 1.75px stroke, currentColor, accompanied by labels: Overview = house, Transactions = three-line list, Cards = card, More = ellipsis, Add = plus, Paid = check, Overdue = warning triangle. Use only necessary inline SVGs without adding an icon library. Decorative icons are aria-hidden; icon-only buttons have accessible names and targets of at least 44×44px.
+Use the bundled Bootstrap Icons font at 20px with `currentColor`, accompanied by labels: Overview = house, Transactions = list, Cards = card, More = ellipsis, Add = plus, Paid = check, Overdue = warning triangle. Decorative icons are aria-hidden; icon-only buttons have accessible names and targets of at least 44×44px. Keep the font self-hosted with the application assets.
 
 ## 3. Components and states
 

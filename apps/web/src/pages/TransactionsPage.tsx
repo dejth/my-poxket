@@ -21,6 +21,7 @@ import {
   type TransactionInput,
 } from '../app/api'
 import { Modal } from '../app/Modal'
+import { Icon } from '../app/Icon'
 import { ActionNotice } from '../app/ActionNotice'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 import {
@@ -619,7 +620,7 @@ function TransactionFormDialog({
             onClick={onClose}
             type="button"
           >
-            ×
+            <Icon name="x-lg" />
           </button>
         </div>
 

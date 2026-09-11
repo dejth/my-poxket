@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import type { SessionData } from './api'
+import { Icon, type IconName } from './Icon'
+import { Logo } from './Logo'
 import { Modal } from './Modal'
 
 interface AppShellProps {
@@ -11,19 +13,13 @@ interface AppShellProps {
 }
 
 const navigation = [
-  { label: 'ภาพรวม', path: '/' },
-  { label: 'รายการ', path: '/transactions' },
-  { label: 'บัตร', path: '/credit-cards' },
-  { label: 'ผ่อน', path: '/installments' },
-  { label: 'ประจำ', path: '/recurring-expenses' },
-  { label: 'หมวดหมู่', path: '/categories' },
+  { icon: 'house-door', label: 'ภาพรวม', path: '/' },
+  { icon: 'list-ul', label: 'รายการ', path: '/transactions' },
+  { icon: 'credit-card', label: 'บัตร', path: '/credit-cards' },
+  { icon: 'wallet2', label: 'ผ่อน', path: '/installments' },
+  { icon: 'arrow-repeat', label: 'ประจำ', path: '/recurring-expenses' },
+  { icon: 'tags', label: 'หมวดหมู่', path: '/categories' },
 ] as const
-
-const mobileIcons = [
-  'M3 10 12 3l9 7v11h-6v-7H9v7H3Z',
-  'M4 6h16M4 12h16M4 18h16',
-  'M3 5h18v14H3ZM3 10h18',
-]
 
 export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
   const [isMoreOpen, setMoreOpen] = useState(false)
@@ -31,12 +27,16 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
   const secondaryNavigation = [
     ...navigation.slice(3),
     ...(session.user.role === 'owner'
-      ? [{ label: 'ผู้ใช้', path: '/users' }]
+      ? [{ icon: 'people' as IconName, label: 'ผู้ใช้', path: '/users' }]
       : []),
   ]
   const isMoreActive = secondaryNavigation.some(
     (item) => pathname === item.path,
   )
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
@@ -44,10 +44,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
       </a>
       <aside className="app-sidebar">
         <NavLink className="app-brand" to="/" aria-label="My Poxket">
-          <span className="brand-mark" aria-hidden="true">
-            P
-          </span>
-          <span>My Poxket</span>
+          <Logo />
         </NavLink>
         <nav className="primary-nav" aria-label="เมนูหลัก">
           {navigation.map((item) => (
@@ -59,6 +56,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
               key={item.path}
               to={item.path}
             >
+              <Icon name={item.icon} />
               {item.label}
             </NavLink>
           ))}
@@ -66,6 +64,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
         <section className="sidebar-account" aria-label="บัญชี">
           {session.user.role === 'owner' ? (
             <NavLink className="nav-link" to="/users">
+              <Icon name="people" />
               ผู้ใช้
             </NavLink>
           ) : null}
@@ -84,10 +83,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
       <div className="app-content">
         <header className="mobile-topbar">
           <NavLink className="app-brand" to="/" aria-label="My Poxket">
-            <span className="brand-mark" aria-hidden="true">
-              P
-            </span>
-            <span>My Poxket</span>
+            <Logo />
           </NavLink>
         </header>
         <div id="main-content" tabIndex={-1}>
@@ -101,11 +97,11 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
         state="quick-add"
         to="/transactions?action=new"
       >
-        <span aria-hidden="true">+</span>
+        <Icon name="plus-lg" />
       </Link>
 
       <nav className="bottom-nav" aria-label="เมนูหลักบนมือถือ">
-        {navigation.slice(0, 3).map((item, index) => (
+        {navigation.slice(0, 3).map((item) => (
           <NavLink
             className={({ isActive }) =>
               isActive ? 'bottom-nav-link is-active' : 'bottom-nav-link'
@@ -114,19 +110,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
             key={item.path}
             to={item.path}
           >
-            <svg
-              aria-hidden="true"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d={mobileIcons[index]} />
-            </svg>
+            <Icon name={item.icon} />
             <span>{item.label}</span>
           </NavLink>
         ))}
@@ -143,19 +127,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
             setMoreOpen(true)
           }}
         >
-          <svg
-            aria-hidden="true"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-          >
-            <circle cx="5" cy="12" r="1" />
-            <circle cx="12" cy="12" r="1" />
-            <circle cx="19" cy="12" r="1" />
-          </svg>
+          <Icon name="three-dots" />
           <span>เพิ่มเติม</span>
         </button>
       </nav>
@@ -172,7 +144,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
                 aria-label="ปิดเมนูเพิ่มเติม"
                 onClick={() => setMoreOpen(false)}
               >
-                ×
+                <Icon name="x-lg" />
               </button>
             </div>
             <nav className="primary-nav" aria-label="เมนูเพิ่มเติม">
@@ -185,6 +157,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
                   to={item.path}
                   onClick={() => setMoreOpen(false)}
                 >
+                  <Icon name={item.icon} />
                   {item.label}
                 </NavLink>
               ))}
@@ -197,6 +170,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
                 onClick={onSignOut}
                 type="button"
               >
+                <Icon name="box-arrow-right" />
                 {isSigningOut ? 'กำลังออก…' : 'ออกจากระบบ'}
               </button>
             </section>

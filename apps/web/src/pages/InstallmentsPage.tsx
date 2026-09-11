@@ -7,6 +7,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
 import { Modal } from '../app/Modal'
+import { Icon } from '../app/Icon'
 import { ActionNotice } from '../app/ActionNotice'
 import {
   cancelInstallmentPlan,
@@ -257,7 +258,7 @@ export function InstallmentsPage() {
           }}
           type="button"
         >
-          + สร้างแผนผ่อน
+          <Icon name="plus-lg" /> สร้างแผนผ่อน
         </button>
       </header>
 
@@ -293,7 +294,7 @@ export function InstallmentsPage() {
 
                   type="button"
                 >
-                  ×
+                  <Icon name="x-lg" />
                 </button>
               </div>
 

@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -44,6 +50,9 @@ describe('mobile navigation', () => {
         .map((link) => link.getAttribute('href')),
     ).toEqual(['/', '/transactions', '/credit-cards'])
     expect(within(bottomNav).getAllByRole('button')).toHaveLength(1)
+    expect(bottomNav.querySelectorAll('svg')).toHaveLength(0)
+    expect(bottomNav.querySelectorAll('.bi')).toHaveLength(4)
+    expect(document.querySelectorAll('.brand-mark .bi-wallet2')).toHaveLength(2)
     expect(
       within(bottomNav).getByRole('link', { name: 'ภาพรวม' }),
     ).toHaveAttribute('aria-current', 'page')
@@ -113,6 +122,17 @@ describe('mobile navigation', () => {
 })
 
 describe('desktop shell', () => {
+  it('scrolls to the top when navigation changes the route', async () => {
+    const scrollToMock = vi.fn()
+    window.scrollTo = scrollToMock
+    const { router } = setup('/transactions')
+    scrollToMock.mockClear()
+
+    await router.navigate('/categories')
+
+    await waitFor(() => expect(scrollToMock).toHaveBeenCalledWith(0, 0))
+  })
+
   it('uses one global quick-add FAB on the transaction page', () => {
     setup('/transactions')
     expect(
