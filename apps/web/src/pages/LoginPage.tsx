@@ -46,6 +46,7 @@ export function LoginPage({
         </header>
 
         <form
+          aria-busy={isSubmitting}
           onSubmit={(event) => void handleSubmit(onSubmit)(event)}
           noValidate
         >
@@ -83,7 +84,7 @@ export function LoginPage({
 
           <label className="remember-row">
             <input type="checkbox" {...register('rememberMe')} />
-            <span>อยู่ในระบบ 7 วัน</span>
+            <span>จดจำการเข้าสู่ระบบ 7 วัน</span>
           </label>
 
           {errorMessage ? (

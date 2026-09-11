@@ -124,6 +124,7 @@ summary:focus-visible {
   min-height: 100svh;
   place-items: center;
   padding: var(--space-5);
+  background: var(--color-canvas);
 }
 
 .auth-card {
@@ -158,7 +159,7 @@ summary:focus-visible {
 }
 
 .auth-heading {
-  margin: 2.25rem 0 1.75rem;
+  margin: var(--space-7) 0 var(--space-5);
 }
 
 .auth-heading h1 {
@@ -170,9 +171,17 @@ summary:focus-visible {
 }
 
 .auth-heading p {
-  margin: 0.4rem 0 0;
+  margin: var(--space-1) 0 0;
   color: var(--color-muted);
-  font-size: 0.95rem;
+  font-size: var(--font-label);
+}
+
+.auth-card form {
+  display: grid;
+}
+
+.auth-card .primary-button {
+  margin-top: var(--space-1);
 }
 
 .field {
@@ -1892,15 +1901,15 @@ summary:focus-visible {
 
   .auth-card {
     width: 100%;
-    padding: max(1.5rem, env(safe-area-inset-top)) 1.5rem
-      max(1.5rem, env(safe-area-inset-bottom));
+    padding: max(var(--space-5), env(safe-area-inset-top)) var(--space-5)
+      max(var(--space-5), env(safe-area-inset-bottom));
     border: 0;
     border-radius: 0;
     box-shadow: none;
   }
 
   .auth-heading {
-    margin-top: clamp(3.5rem, 14vh, 6rem);
+    margin-top: var(--space-7);
   }
 
   .app-header,
