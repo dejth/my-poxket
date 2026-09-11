@@ -385,13 +385,15 @@ describe('finance pages', () => {
   })
 
   it('shows active and inactive categories without hiding history', async () => {
+    const confirm = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirm)
     stubFinanceFetch({
       categories: [
         {
           direction: 'expense',
           id: '11111111-1111-4111-8111-111111111111',
           isActive: true,
-          name: 'อาหารสมมติ',
+          name: 'หมวดหมู่รายจ่ายสมมติชื่อยาวมากสำหรับตรวจการตัดบรรทัดบนหน้าจอแคบ',
         },
         {
           direction: 'income',
@@ -404,14 +406,23 @@ describe('finance pages', () => {
     })
     renderPage(<CategoriesPage />)
 
-    expect(await screen.findByText('อาหารสมมติ')).toBeInTheDocument()
+    const longName =
+      'หมวดหมู่รายจ่ายสมมติชื่อยาวมากสำหรับตรวจการตัดบรรทัดบนหน้าจอแคบ'
+    expect(await screen.findByText(longName)).toBeInTheDocument()
     expect(screen.getByText('รายได้เดิม')).toBeInTheDocument()
     expect(
-      screen.getByText('ปิดใช้งาน', { selector: 'small' }),
+      screen.getByText('ปิดใช้งาน', { selector: '.status-label' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'เปิดใช้งาน' }),
+      screen.getByRole('button', { name: 'เปิดใช้งานหมวดหมู่ รายได้เดิม' }),
     ).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: `ปิดใช้งานหมวดหมู่ ${longName}` }),
+    )
+    expect(confirm).toHaveBeenCalledWith(
+      'ปิดหมวดหมู่นี้ใช่หรือไม่ ประวัติรายการเดิมจะยังคงอยู่',
+    )
+    expect(await screen.findByText('ปิดใช้งานหมวดหมู่แล้ว')).toBeInTheDocument()
   })
 
   it('formats large THB minor units without floating-point conversion', () => {
