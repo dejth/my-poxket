@@ -291,6 +291,14 @@ export function RecurringExpensesPage() {
                 ×
               </button>
             </div>
+            {editing ? (
+              <div className="recurring-impact-note">
+                <strong>
+                  มีผลกับรายการที่ยังไม่จ่ายตั้งแต่เดือนนี้เป็นต้นไป
+                </strong>
+                <p>รายการที่จ่ายแล้วและประวัติเดิมจะคงข้อมูลเดิม</p>
+              </div>
+            ) : null}
             <label className="field">
               ชื่อรายการ
               <input
@@ -500,10 +508,10 @@ function RecurringCard({
 }) {
   const current = rule.occurrences.find(({ status }) => status === 'unpaid')
   return (
-    <article className="surface installment-plan-card">
+    <article className="surface installment-plan-card recurring-rule-card">
       <div className="installment-plan-heading">
         <div>
-          <p className="eyebrow">ประจำ · {rule.categoryName}</p>
+          <p className="eyebrow">กฎรายเดือน · {rule.categoryName}</p>
           <h2>{rule.description}</h2>
           <p>
             {formatThbMinor(rule.amountMinor)} ทุกวันที่ {rule.recurrenceDay} ·{' '}
@@ -517,11 +525,13 @@ function RecurringCard({
       {rule.status === 'active' && current ? (
         <div className="current-installment-action">
           <div>
-            <span>รายการที่ต้องจัดการ</span>
-            <strong>ประจำ · {formatThbMinor(current.amountMinor)}</strong>
+            <span>รายการเดือนปัจจุบัน</span>
+            <strong>{formatThbMinor(current.amountMinor)}</strong>
             <small>ครบกำหนด {formatThaiDate(current.dueDate)}</small>
+            <span className="status-label unpaid">ยังไม่จ่าย</span>
           </div>
           <button
+            aria-label={`บันทึกว่าจ่ายแล้ว ${rule.description} ครบกำหนด ${formatThaiDate(current.dueDate)}`}
             className="primary-button"
             disabled={isPending}
             onClick={() => onPay(current)}
@@ -532,26 +542,33 @@ function RecurringCard({
         </div>
       ) : null}
       <details className="installment-details">
-        <summary>ดูรายการที่สร้างแล้ว {rule.occurrences.length} เดือน</summary>
+        <summary>
+          รายการรายเดือนที่สร้างแล้ว {rule.occurrences.length} รายการ
+        </summary>
         <ol className="installment-occurrences">
           {rule.occurrences.map((occurrence) => (
             <li key={occurrence.id}>
               <div>
-                <strong>ประจำ · {formatThaiDate(occurrence.dueDate)}</strong>
+                <strong>ครบกำหนด {formatThaiDate(occurrence.dueDate)}</strong>
                 <span>
                   {formatThbMinor(occurrence.amountMinor)} ·{' '}
                   {occurrence.categoryName}
                 </span>
-                <small>
-                  {occurrence.status === 'paid'
-                    ? `จ่ายแล้ว ${formatThaiDate(occurrence.paidDate!)} · ${formatThbMinor(occurrence.paidAmountMinor!)}`
-                    : occurrence.status === 'cancelled'
-                      ? 'ยกเลิกแล้ว'
-                      : 'ยังไม่จ่าย'}
-                </small>
+                <div className="installment-occurrence-status">
+                  <span className={`status-label ${occurrence.status}`}>
+                    {recurringOccurrenceStatusLabel(occurrence.status)}
+                  </span>
+                  {occurrence.status === 'paid' ? (
+                    <small>
+                      จ่าย {formatThbMinor(occurrence.paidAmountMinor!)} เมื่อ{' '}
+                      {formatThaiDate(occurrence.paidDate!)}
+                    </small>
+                  ) : null}
+                </div>
               </div>
               {occurrence.status === 'unpaid' ? (
                 <button
+                  aria-label={`จ่ายแล้ว ${rule.description} ครบกำหนด ${formatThaiDate(occurrence.dueDate)}`}
                   className="small-button"
                   disabled={isPending}
                   onClick={() => onPay(occurrence)}
@@ -561,6 +578,7 @@ function RecurringCard({
                 </button>
               ) : occurrence.status === 'paid' ? (
                 <button
+                  aria-label={`เปลี่ยนเป็นยังไม่จ่าย ${rule.description} ครบกำหนด ${formatThaiDate(occurrence.dueDate)}`}
                   className="small-button"
                   disabled={isPending}
                   onClick={() => onUnpay(occurrence)}
@@ -747,6 +765,16 @@ function emptyForm(): FormValues {
 function minorToDecimal(value: string) {
   const minor = BigInt(value)
   return `${minor / 100n}.${(minor % 100n).toString().padStart(2, '0')}`
+}
+
+function recurringOccurrenceStatusLabel(
+  status: RecurringOccurrenceData['status'],
+) {
+  return status === 'paid'
+    ? 'จ่ายแล้ว'
+    : status === 'cancelled'
+      ? 'ยกเลิกแล้ว'
+      : 'ยังไม่จ่าย'
 }
 
 function FieldError({

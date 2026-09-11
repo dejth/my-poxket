@@ -958,7 +958,7 @@ describe('finance pages', () => {
     expect(screen.queryByText('แผน 1')).not.toBeInTheDocument()
   })
 
-  it('shows recurring rules separately and exposes explicit stop choices', async () => {
+  it('separates recurring rule and occurrence statuses and explains future changes', async () => {
     stubFinanceFetch({
       categories: [],
       recurring: [
@@ -989,6 +989,38 @@ describe('finance pages', () => {
               recurrencePeriod: '2026-09',
               status: 'unpaid',
             },
+            {
+              amountMinor: '69000',
+              categoryId: '11111111-1111-4111-8111-111111111111',
+              categoryName: 'ค่าสมาชิกสมมติ',
+              creditCardId: null,
+              creditCardMaskedSuffix: null,
+              creditCardName: null,
+              description: 'บริการสมมติรายเดือน',
+              dueDate: '2026-08-10',
+              id: '99999999-9999-4999-8999-999999999999',
+              paidAmountMinor: '68000',
+              paidDate: '2026-08-09',
+              paymentMethod: 'bank_transfer',
+              recurrencePeriod: '2026-08',
+              status: 'paid',
+            },
+            {
+              amountMinor: '70000',
+              categoryId: '11111111-1111-4111-8111-111111111111',
+              categoryName: 'ค่าสมาชิกสมมติ',
+              creditCardId: null,
+              creditCardMaskedSuffix: null,
+              creditCardName: null,
+              description: 'บริการสมมติรายเดือน',
+              dueDate: '2026-07-10',
+              id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              paidAmountMinor: null,
+              paidDate: null,
+              paymentMethod: 'bank_transfer',
+              recurrencePeriod: '2026-07',
+              status: 'cancelled',
+            },
           ],
           paymentMethod: 'bank_transfer',
           recurrenceDay: 10,
@@ -1002,7 +1034,23 @@ describe('finance pages', () => {
     renderPage(<RecurringExpensesPage />)
 
     expect(await screen.findByText('บริการสมมติรายเดือน')).toBeInTheDocument()
-    expect(screen.getAllByText(/ประจำ/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/กฎรายเดือน/)).toBeInTheDocument()
+    expect(screen.getByText('ทำงานอยู่')).toBeInTheDocument()
+    expect(screen.getByText('รายการเดือนปัจจุบัน')).toBeInTheDocument()
+    expect(screen.queryByText(/\d+\/\d+/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('รายการรายเดือนที่สร้างแล้ว 3 รายการ'))
+    expect(screen.getAllByText('ยังไม่จ่าย')).toHaveLength(2)
+    expect(screen.getAllByText('จ่ายแล้ว')).toHaveLength(2)
+    expect(screen.getByText('ยกเลิกแล้ว')).toBeInTheDocument()
+    expect(screen.getByText(/จ่าย ฿680\.00 เมื่อ/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'แก้ไขอนาคต' }))
+    expect(
+      screen.getByText('มีผลกับรายการที่ยังไม่จ่ายตั้งแต่เดือนนี้เป็นต้นไป'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('รายการที่จ่ายแล้วและประวัติเดิมจะคงข้อมูลเดิม'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
     fireEvent.click(screen.getByRole('button', { name: 'หยุดรายการประจำ' }))
     expect(
       screen.getByRole('dialog', { name: 'จัดการรายการอนาคต' }),
@@ -1012,6 +1060,9 @@ describe('finance pages', () => {
     ).toBeChecked()
     expect(
       screen.getByLabelText('คงรายการที่สร้างไว้ให้จ่ายต่อ'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('รายการที่จ่ายแล้วและประวัติเดิมจะไม่ถูกแก้ไข'),
     ).toBeInTheDocument()
   })
 })
