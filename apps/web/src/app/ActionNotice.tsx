@@ -1,5 +1,7 @@
 import { type Dispatch, type SetStateAction, useEffect } from 'react'
 
+import { Icon } from './Icon'
+
 export function ActionNotice({
   message,
   setMessage,
@@ -21,7 +23,7 @@ export function ActionNotice({
         onClick={() => setMessage(null)}
         type="button"
       >
-        ×
+        <Icon name="x-lg" />
       </button>
     </div>
   ) : null

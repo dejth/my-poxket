@@ -141,3 +141,18 @@ it('keeps the filter primary action content-sized', () => {
     style.remove()
   }
 })
+
+it('keeps short modal forms content-sized', () => {
+  const style = document.createElement('style')
+  style.textContent = css
+  document.head.append(style)
+  const form = document.createElement('form')
+  form.className = 'transaction-form'
+  document.body.append(form)
+  try {
+    expect(getComputedStyle(form).alignContent).toBe('start')
+  } finally {
+    form.remove()
+    style.remove()
+  }
+})

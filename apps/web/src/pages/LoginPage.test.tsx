@@ -14,6 +14,7 @@ describe('LoginPage', () => {
     )
 
     expect(screen.getByText('My Poxket')).toBeInTheDocument()
+    expect(document.querySelector('.brand-mark .bi-wallet2')).not.toBeNull()
     expect(screen.getByText('พื้นที่การเงินส่วนตัวของคุณ')).toBeInTheDocument()
     expect(screen.queryByText('THB · 2 ตำแหน่ง')).not.toBeInTheDocument()
     expect(screen.queryByText('Asia/Bangkok')).not.toBeInTheDocument()

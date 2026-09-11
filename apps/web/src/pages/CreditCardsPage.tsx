@@ -6,6 +6,8 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 import { ActionNotice } from '../app/ActionNotice'
+import { Icon } from '../app/Icon'
+import { Modal } from '../app/Modal'
 import {
   createCreditCard,
   getCreditCards,
@@ -40,6 +42,7 @@ export function CreditCardsPage() {
   const { session } = useAuthenticatedContext()
   const queryClient = useQueryClient()
   const [notice, setNotice] = useState<string | null>(null)
+  const [isFormOpen, setFormOpen] = useState(false)
   const [filters, setFilters] = useState(currentYearRange)
   const [draftFilters, setDraftFilters] = useState(currentYearRange)
   const cardsQuery = useQuery({
@@ -64,6 +67,7 @@ export function CreditCardsPage() {
       }),
     onSuccess: async () => {
       setNotice('เพิ่มบัตรเครดิตแล้ว')
+      setFormOpen(false)
       form.reset({ cutoffDay: 17, dueDay: 1, maskedSuffix: '', name: '' })
       await queryClient.invalidateQueries({ queryKey: ['credit-cards'] })
     },
@@ -82,199 +86,240 @@ export function CreditCardsPage() {
 
   return (
     <main className="page-shell">
-      <header className="page-header">
-        <p className="eyebrow">รอบบัตรและยอดชำระ</p>
-        <h1>บัตรเครดิต</h1>
-        <p>แยกวันครบกำหนดของผู้ให้บริการออกจากวันที่วางแผนชำระ</p>
+      <header className="page-header page-header-actions">
+        <div>
+          <p className="eyebrow">รอบบัตรและยอดชำระ</p>
+          <h1>บัตรเครดิต</h1>
+          <p>แยกวันครบกำหนดของผู้ให้บริการออกจากวันที่วางแผนชำระ</p>
+        </div>
+        <button
+          className="primary-button action-button"
+          onClick={() => {
+            createMutation.reset()
+            form.reset({ cutoffDay: 17, dueDay: 1, maskedSuffix: '', name: '' })
+            setFormOpen(true)
+          }}
+          type="button"
+        >
+          <Icon name="plus-lg" /> เพิ่มบัตร
+        </button>
       </header>
 
       <ActionNotice message={notice} setMessage={setNotice} />
 
-      <section className="category-layout">
-        <form
-          className="surface compact-form"
-          onSubmit={(event) => {
-            void form.handleSubmit((values) => createMutation.mutate(values))(
-              event,
-            )
+      {isFormOpen ? (
+        <Modal
+          labelledBy="credit-card-form-title"
+          onClose={() => {
+            if (!createMutation.isPending) setFormOpen(false)
           }}
         >
-          <div className="section-heading">
-            <h2>เพิ่มบัตร</h2>
-          </div>
-
-          <label className="field">
-            ชื่อบัตร
-            <input
-              aria-invalid={Boolean(form.formState.errors.name)}
-              aria-describedby={
-                form.formState.errors.name
-                  ? 'CreditCardsPage-name-error'
-                  : undefined
-              }
-              autoComplete="off"
-              placeholder="เช่น บัตรตัวอย่าง"
-              {...form.register('name')}
-            />
-            {form.formState.errors.name ? (
-              <small id="CreditCardsPage-name-error" role="alert">
-                {form.formState.errors.name.message}
-              </small>
-            ) : null}
-          </label>
-
-          <label className="field">
-            เลขท้ายบัตร (ไม่บังคับ)
-            <input
-              aria-invalid={Boolean(form.formState.errors.maskedSuffix)}
-              aria-describedby={
-                form.formState.errors.maskedSuffix
-                  ? 'CreditCardsPage-maskedSuffix-error'
-                  : undefined
-              }
-              autoComplete="off"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="1234"
-              {...form.register('maskedSuffix')}
-            />
-            {form.formState.errors.maskedSuffix ? (
-              <small id="CreditCardsPage-maskedSuffix-error" role="alert">
-                {form.formState.errors.maskedSuffix.message}
-              </small>
-            ) : null}
-          </label>
-
-          <div className="card-rule-grid">
-            <label className="field">
-              วันสรุปยอด
-              <input
-                aria-invalid={Boolean(form.formState.errors.cutoffDay)}
-                aria-describedby={
-                  form.formState.errors.cutoffDay
-                    ? 'CreditCardsPage-cutoffDay-error'
-                    : undefined
-                }
-                inputMode="numeric"
-                max={31}
-                min={1}
-                type="number"
-                {...form.register('cutoffDay', { valueAsNumber: true })}
-              />
-              {form.formState.errors.cutoffDay ? (
-                <small id="CreditCardsPage-cutoffDay-error" role="alert">
-                  ระบุวันที่ 1–31
-                </small>
-              ) : null}
-            </label>
-            <label className="field">
-              วันครบกำหนด
-              <input
-                aria-invalid={Boolean(form.formState.errors.dueDay)}
-                aria-describedby={
-                  form.formState.errors.dueDay
-                    ? 'CreditCardsPage-dueDay-error'
-                    : undefined
-                }
-                inputMode="numeric"
-                max={31}
-                min={1}
-                type="number"
-                {...form.register('dueDay', { valueAsNumber: true })}
-              />
-              {form.formState.errors.dueDay ? (
-                <small id="CreditCardsPage-dueDay-error" role="alert">
-                  ระบุวันที่ 1–31
-                </small>
-              ) : null}
-            </label>
-          </div>
-
-          {createMutation.isError || statusMutation.isError ? (
-            <p className="form-error" role="alert">
-              {createMutation.error?.message ?? statusMutation.error?.message}
-            </p>
-          ) : null}
-
-          <button
-            className="primary-button"
-            disabled={createMutation.isPending}
-            type="submit"
+          <form
+            aria-labelledby="credit-card-form-title"
+            className="form-dialog transaction-form"
+            onSubmit={(event) => {
+              void form.handleSubmit((values) => createMutation.mutate(values))(
+                event,
+              )
+            }}
           >
-            {createMutation.isPending ? 'กำลังเพิ่ม…' : 'เพิ่มบัตร'}
-          </button>
-        </form>
-
-        <section
-          className="surface category-list"
-          aria-labelledby="cards-title"
-        >
-          <div className="section-heading">
-            <div>
-              <h2 id="cards-title">บัตรทั้งหมด</h2>
-              <p>{cards.length} ใบ</p>
+            <div className="dialog-heading">
+              <h2 id="credit-card-form-title">เพิ่มบัตร</h2>
+              <button
+                aria-label="ปิด"
+                className="icon-button"
+                onClick={() => setFormOpen(false)}
+                type="button"
+              >
+                <Icon name="x-lg" />
+              </button>
             </div>
-          </div>
 
-          {cardsQuery.isPending ? (
-            <p className="muted-state" aria-busy="true" role="status">
-              กำลังโหลดบัตร…
-            </p>
-          ) : cardsQuery.isError ? (
-            <QueryError
-              message={cardsQuery.error.message}
-              onRetry={() => {
-                void cardsQuery.refetch()
-              }}
-            />
-          ) : cards.length === 0 ? (
-            <p className="muted-state">ยังไม่มีบัตรเครดิต</p>
-          ) : (
-            <ul className="category-items card-items">
-              {cards.map((card) => (
-                <li className="credit-card-item" key={card.id}>
-                  <div className="credit-card-details">
-                    <strong>{formatCardName(card)}</strong>
-                    <span
-                      className={`status-label ${card.isActive ? '' : 'stopped'}`}
-                    >
-                      {card.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}
-                    </span>
-                    <dl className="credit-card-rules">
-                      <div>
-                        <dt>วันสรุปยอด</dt>
-                        <dd>วันที่ {card.cutoffDay}</dd>
-                      </div>
-                      <div>
-                        <dt>วันครบกำหนดตามบัตร</dt>
-                        <dd>วันที่ {card.dueDay}</dd>
-                      </div>
-                    </dl>
-                  </div>
-                  <button
-                    aria-label={`${card.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} ${formatCardName(card)}`}
-                    className="small-button"
-                    disabled={statusMutation.isPending}
-                    onClick={() => {
-                      const isActive = !card.isActive
-                      if (
-                        isActive ||
-                        window.confirm(
-                          'ปิดบัตรนี้ใช่หรือไม่ ประวัติรายการเดิมจะยังคงอยู่',
-                        )
-                      ) {
-                        statusMutation.mutate({ id: card.id, isActive })
-                      }
-                    }}
-                    type="button"
+            <label className="field">
+              ชื่อบัตร
+              <input
+                aria-invalid={Boolean(form.formState.errors.name)}
+                aria-describedby={
+                  form.formState.errors.name
+                    ? 'CreditCardsPage-name-error'
+                    : undefined
+                }
+                autoComplete="off"
+                placeholder="เช่น บัตรตัวอย่าง"
+                {...form.register('name')}
+              />
+              {form.formState.errors.name ? (
+                <small id="CreditCardsPage-name-error" role="alert">
+                  {form.formState.errors.name.message}
+                </small>
+              ) : null}
+            </label>
+
+            <label className="field">
+              เลขท้ายบัตร (ไม่บังคับ)
+              <input
+                aria-invalid={Boolean(form.formState.errors.maskedSuffix)}
+                aria-describedby={
+                  form.formState.errors.maskedSuffix
+                    ? 'CreditCardsPage-maskedSuffix-error'
+                    : undefined
+                }
+                autoComplete="off"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="1234"
+                {...form.register('maskedSuffix')}
+              />
+              {form.formState.errors.maskedSuffix ? (
+                <small id="CreditCardsPage-maskedSuffix-error" role="alert">
+                  {form.formState.errors.maskedSuffix.message}
+                </small>
+              ) : null}
+            </label>
+
+            <div className="card-rule-grid">
+              <label className="field">
+                วันสรุปยอด
+                <input
+                  aria-invalid={Boolean(form.formState.errors.cutoffDay)}
+                  aria-describedby={
+                    form.formState.errors.cutoffDay
+                      ? 'CreditCardsPage-cutoffDay-error'
+                      : undefined
+                  }
+                  inputMode="numeric"
+                  max={31}
+                  min={1}
+                  type="number"
+                  {...form.register('cutoffDay', { valueAsNumber: true })}
+                />
+                {form.formState.errors.cutoffDay ? (
+                  <small id="CreditCardsPage-cutoffDay-error" role="alert">
+                    ระบุวันที่ 1–31
+                  </small>
+                ) : null}
+              </label>
+              <label className="field">
+                วันครบกำหนด
+                <input
+                  aria-invalid={Boolean(form.formState.errors.dueDay)}
+                  aria-describedby={
+                    form.formState.errors.dueDay
+                      ? 'CreditCardsPage-dueDay-error'
+                      : undefined
+                  }
+                  inputMode="numeric"
+                  max={31}
+                  min={1}
+                  type="number"
+                  {...form.register('dueDay', { valueAsNumber: true })}
+                />
+                {form.formState.errors.dueDay ? (
+                  <small id="CreditCardsPage-dueDay-error" role="alert">
+                    ระบุวันที่ 1–31
+                  </small>
+                ) : null}
+              </label>
+            </div>
+
+            {createMutation.isError ? (
+              <p className="form-error" role="alert">
+                {createMutation.error.message}
+              </p>
+            ) : null}
+
+            <div className="dialog-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setFormOpen(false)}
+                type="button"
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="primary-button"
+                disabled={createMutation.isPending}
+                type="submit"
+              >
+                {createMutation.isPending ? 'กำลังเพิ่ม…' : 'เพิ่มบัตร'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      <section className="surface category-list" aria-labelledby="cards-title">
+        <div className="section-heading">
+          <div>
+            <h2 id="cards-title">บัตรทั้งหมด</h2>
+            <p>{cards.length} ใบ</p>
+          </div>
+        </div>
+
+        {statusMutation.isError ? (
+          <p className="inline-error" role="alert">
+            {statusMutation.error.message}
+          </p>
+        ) : null}
+
+        {cardsQuery.isPending ? (
+          <p className="muted-state" aria-busy="true" role="status">
+            กำลังโหลดบัตร…
+          </p>
+        ) : cardsQuery.isError ? (
+          <QueryError
+            message={cardsQuery.error.message}
+            onRetry={() => {
+              void cardsQuery.refetch()
+            }}
+          />
+        ) : cards.length === 0 ? (
+          <p className="muted-state">ยังไม่มีบัตรเครดิต</p>
+        ) : (
+          <ul className="category-items card-items">
+            {cards.map((card) => (
+              <li className="credit-card-item" key={card.id}>
+                <div className="credit-card-details">
+                  <strong>{formatCardName(card)}</strong>
+                  <span
+                    className={`status-label ${card.isActive ? '' : 'stopped'}`}
                   >
-                    {card.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                    {card.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}
+                  </span>
+                  <dl className="credit-card-rules">
+                    <div>
+                      <dt>วันสรุปยอด</dt>
+                      <dd>วันที่ {card.cutoffDay}</dd>
+                    </div>
+                    <div>
+                      <dt>วันครบกำหนดตามบัตร</dt>
+                      <dd>วันที่ {card.dueDay}</dd>
+                    </div>
+                  </dl>
+                </div>
+                <button
+                  aria-label={`${card.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} ${formatCardName(card)}`}
+                  className="small-button"
+                  disabled={statusMutation.isPending}
+                  onClick={() => {
+                    const isActive = !card.isActive
+                    if (
+                      isActive ||
+                      window.confirm(
+                        'ปิดบัตรนี้ใช่หรือไม่ ประวัติรายการเดิมจะยังคงอยู่',
+                      )
+                    ) {
+                      statusMutation.mutate({ id: card.id, isActive })
+                    }
+                  }}
+                  type="button"
+                >
+                  {card.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="statement-section">
