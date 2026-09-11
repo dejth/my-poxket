@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 
+import { ActionNotice } from '../app/ActionNotice'
+import { QueryError } from '../app/QueryError'
 import { getUsers, saveUser, type UserData, type UserInput } from '../app/api'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 
@@ -8,7 +10,8 @@ export function UsersPage() {
   const { session } = useAuthenticatedContext()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<UserData | null>(null)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
+  const [validationError, setValidationError] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
   const isOwner = session.user.role === 'owner'
@@ -23,6 +26,7 @@ export function UsersPage() {
     onSuccess: async (result) => {
       formRef.current?.reset()
       setEditing(null)
+      setValidationError('')
       if (result.requiresLogin) {
         queryClient.clear()
         window.location.assign('/')
@@ -52,7 +56,7 @@ export function UsersPage() {
         <h1>ผู้ใช้</h1>
         <p>ผู้ใช้ทุกบัญชีใช้งานข้อมูลการเงินชุดเดียวกัน</p>
       </header>
-      {notice ? <p role="status">{notice}</p> : null}
+      <ActionNotice message={notice} setMessage={setNotice} />
       <div className="category-layout users-layout">
         <form
           className="surface compact-form"
@@ -73,10 +77,12 @@ export function UsersPage() {
             const name = rawName.trim()
             const username = rawUsername.trim()
             if (!name || username.length < 3) {
-              setNotice('กรุณาระบุชื่อและชื่อผู้ใช้อย่างน้อย 3 ตัวอักษร')
+              setValidationError(
+                'กรุณาระบุชื่อและชื่อผู้ใช้อย่างน้อย 3 ตัวอักษร',
+              )
               return
             }
-            setNotice('')
+            setValidationError('')
             mutation.mutate({
               input: { name, username, ...(password ? { password } : {}) },
               ...(editing ? { id: editing.id } : {}),
@@ -127,6 +133,11 @@ export function UsersPage() {
               ? 'เว้นว่างเพื่อใช้รหัสผ่านเดิม หากเปลี่ยน ผู้ใช้นี้ต้องเข้าสู่ระบบใหม่'
               : 'อย่างน้อย 12 ตัวอักษร'}
           </p>
+          {validationError ? (
+            <p className="form-error" role="alert">
+              {validationError}
+            </p>
+          ) : null}
           {mutation.error ? (
             <p className="form-error" role="alert">
               {mutation.error.message}
@@ -147,6 +158,7 @@ export function UsersPage() {
                 setEditing(null)
                 mutation.reset()
                 setNotice('')
+                setValidationError('')
               }}
               type="button"
             >
@@ -159,30 +171,29 @@ export function UsersPage() {
           className="surface category-list"
         >
           <div className="section-heading">
-            <h2 id="users-list-title">ผู้ใช้ทั้งหมด</h2>
+            <div>
+              <h2 id="users-list-title">ผู้ใช้ทั้งหมด</h2>
+              {usersQuery.data ? <p>{usersQuery.data.length} บัญชี</p> : null}
+            </div>
           </div>
           {usersQuery.isPending ? (
-            <p role="status">กำลังโหลดผู้ใช้…</p>
+            <p className="muted-state" aria-busy="true" role="status">
+              กำลังโหลดผู้ใช้…
+            </p>
           ) : usersQuery.isError ? (
-            <div role="alert">
-              <p>{usersQuery.error.message}</p>
-              <button
-                className="small-button"
-                onClick={() => {
-                  void usersQuery.refetch()
-                }}
-                type="button"
-              >
-                ลองอีกครั้ง
-              </button>
-            </div>
+            <QueryError
+              message={usersQuery.error.message}
+              onRetry={() => {
+                void usersQuery.refetch()
+              }}
+            />
           ) : (
-            <ul className="category-items">
+            <ul className="user-items">
               {usersQuery.data.map((user) => (
                 <li key={user.id}>
-                  <div>
-                    <span>{user.name}</span>
-                    <small>{user.username}</small>
+                  <div className="user-identity">
+                    <strong>{user.name}</strong>
+                    <span>@{user.username}</span>
                   </div>
                   <button
                     aria-label={`แก้ไข ${user.name}`}
@@ -192,6 +203,7 @@ export function UsersPage() {
                       setEditing(user)
                       mutation.reset()
                       setNotice('')
+                      setValidationError('')
                       requestAnimationFrame(() => {
                         nameRef.current?.focus()
                         formRef.current?.scrollIntoView({ block: 'start' })
