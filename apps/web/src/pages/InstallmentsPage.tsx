@@ -697,7 +697,7 @@ function InstallmentPlanCard({
         <div>
           <span>ชำระแล้ว</span>
           <strong>
-            {paidCount}/{plan.totalInstallments}
+            {paidCount} จาก {plan.totalInstallments} งวด
           </strong>
         </div>
         <div>
@@ -723,12 +723,16 @@ function InstallmentPlanCard({
           <div>
             <span>งวดที่ต้องจัดการ</span>
             <strong>
-              {current.installmentNumber}/{plan.totalInstallments} ·{' '}
-              {formatOptionalAmount(current.amountMinor, 'ระบุยอดตอนจ่าย')}
+              งวด {current.installmentNumber}/{plan.totalInstallments}
             </strong>
+            <span>
+              ยอดตามแผน{' '}
+              {formatOptionalAmount(current.amountMinor, 'ระบุยอดตอนจ่าย')}
+            </span>
             <small>ครบกำหนด {formatThaiDate(current.dueDate)}</small>
           </div>
           <button
+            aria-label={`บันทึกว่าจ่ายแล้ว งวด ${current.installmentNumber}/${plan.totalInstallments} ของ ${plan.description}`}
             className="primary-button"
             disabled={isPending}
             onClick={() => onPay(current)}
@@ -748,17 +752,29 @@ function InstallmentPlanCard({
                 <strong>
                   งวด {occurrence.installmentNumber}/{plan.totalInstallments}
                 </strong>
+                <span>ครบกำหนด {formatThaiDate(occurrence.dueDate)}</span>
                 <span>
-                  {formatThaiDate(occurrence.dueDate)} ·{' '}
+                  ยอดตามแผน{' '}
                   {formatOptionalAmount(
                     occurrence.amountMinor,
                     'ยังไม่ระบุยอด',
                   )}
                 </span>
-                <small>{occurrenceLabel(occurrence, plan)}</small>
+                <div className="installment-occurrence-status">
+                  <span className={`status-label ${occurrence.status}`}>
+                    {occurrenceStatusLabel(occurrence, plan)}
+                  </span>
+                  {occurrence.status === 'paid' ? (
+                    <small>
+                      ยอดจ่ายจริง {formatThbMinor(occurrence.paidAmountMinor!)}{' '}
+                      · {formatThaiDate(occurrence.paidDate!)}
+                    </small>
+                  ) : null}
+                </div>
               </div>
               {plan.status === 'active' && occurrence.status === 'unpaid' ? (
                 <button
+                  aria-label={`จ่ายแล้ว งวด ${occurrence.installmentNumber}/${plan.totalInstallments} ของ ${plan.description}`}
                   className="small-button"
                   disabled={isPending}
                   onClick={() => onPay(occurrence)}
@@ -770,6 +786,7 @@ function InstallmentPlanCard({
                 (plan.status !== 'settled' || occurrence.closesPlan) &&
                 plan.status !== 'cancelled' ? (
                 <button
+                  aria-label={`${occurrence.closesPlan ? 'ยกเลิกการปิดยอด' : 'เปลี่ยนเป็นยังไม่จ่าย'} งวด ${occurrence.installmentNumber}/${plan.totalInstallments} ของ ${plan.description}`}
                   className="small-button"
                   disabled={isPending}
                   onClick={() => onUnpay(occurrence)}
@@ -787,6 +804,7 @@ function InstallmentPlanCard({
 
       {plan.status === 'active' ? (
         <button
+          aria-label={`ยกเลิกงวดที่ยังไม่จ่ายของ ${plan.description}`}
           className="text-button danger"
           disabled={isPending}
           onClick={onCancel}
@@ -911,12 +929,12 @@ function PaymentDialog({
   )
 }
 
-function occurrenceLabel(
+function occurrenceStatusLabel(
   occurrence: InstallmentOccurrenceData,
   plan: InstallmentPlanData,
 ) {
   if (occurrence.status === 'paid')
-    return `${occurrence.closesPlan ? 'ปิดยอดแล้ว' : 'จ่ายแล้ว'} ${formatThaiDate(occurrence.paidDate!)} · ${formatThbMinor(occurrence.paidAmountMinor!)}`
+    return occurrence.closesPlan ? 'ปิดยอดแล้ว' : 'จ่ายแล้ว'
   if (occurrence.status === 'cancelled')
     return plan.status === 'settled' ? 'ยกเลิกจากการปิดยอด' : 'ยกเลิกแล้ว'
   return 'ยังไม่จ่าย'

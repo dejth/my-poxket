@@ -1056,6 +1056,10 @@ summary:focus-visible {
   background: #f7f8f6;
 }
 
+.installment-summary strong {
+  overflow-wrap: anywhere;
+}
+
 .installment-summary span,
 .installment-occurrences span,
 .installment-occurrences small,
@@ -1081,6 +1085,10 @@ summary:focus-visible {
   display: grid;
   min-width: 0;
   gap: 0.15rem;
+}
+
+.current-installment-action strong {
+  font-size: var(--font-section);
 }
 
 .current-installment-action .primary-button {
@@ -1120,6 +1128,18 @@ summary:focus-visible {
 .installment-occurrences li > div {
   display: grid;
   gap: 0.1rem;
+}
+
+.installment-occurrence-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.installment-occurrence-status .status-label {
+  width: fit-content;
 }
 
 .installment-plan-card > .text-button {
