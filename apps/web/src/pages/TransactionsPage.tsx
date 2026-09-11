@@ -15,13 +15,13 @@ import {
   getTransactions,
   type CategoryData,
   type CreditCardData,
-  type Direction,
   type PaymentMethod,
   type TransactionData,
   type TransactionFilters,
   type TransactionInput,
 } from '../app/api'
 import { Modal } from '../app/Modal'
+import { Icon } from '../app/Icon'
 import { ActionNotice } from '../app/ActionNotice'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 import {
@@ -65,6 +65,19 @@ const paymentLabels: Record<PaymentMethod, string> = {
   other: 'อื่น ๆ',
 }
 
+const defaultTransactionFilters: TransactionFilters = {
+  page: 1,
+  pageSize: 25,
+  status: 'active',
+}
+
+const transactionStatusLabels = {
+  active: 'ใช้งาน',
+  all: 'ทุกสถานะ',
+  cancelled: 'ยกเลิก',
+  superseded: 'ถูกแก้ไข',
+} as const
+
 type TransactionFormValues = z.infer<typeof transactionSchema>
 
 export function TransactionsPage() {
@@ -74,11 +87,9 @@ export function TransactionsPage() {
   const quickAddFromPage = useLocation().state === 'quick-add'
   const [searchParams, setSearchParams] = useSearchParams()
   const quickAddRequested = searchParams.get('action') === 'new'
-  const [filters, setFilters] = useState<TransactionFilters>({
-    page: 1,
-    pageSize: 25,
-    status: 'active',
-  })
+  const [filters, setFilters] = useState<TransactionFilters>(
+    defaultTransactionFilters,
+  )
   const [formTarget, setFormTarget] = useState<TransactionData | 'new' | null>(
     null,
   )
@@ -131,19 +142,12 @@ export function TransactionsPage() {
 
   return (
     <main className="page-shell">
-      <header className="page-header page-header-actions">
+      <header className="page-header">
         <div>
           <p className="eyebrow">กิจกรรมการเงิน</p>
           <h1>รายรับและรายจ่าย</h1>
           <p>บันทึกตามวันที่เกิดรายการ โดยยังไม่รวมยอดชำระบัตรเครดิต</p>
         </div>
-        <button
-          className="primary-button action-button"
-          onClick={() => setFormTarget('new')}
-          type="button"
-        >
-          เพิ่มรายการ
-        </button>
       </header>
 
       <TransactionFilterBar
@@ -297,16 +301,23 @@ function TransactionFilterBar({
   readonly onApply: (filters: TransactionFilters) => void
 }) {
   const [draft, setDraft] = useState(filters)
+  const appliedConditions = describeFilters(filters, categories, creditCards)
+  const additionalFilterCount = countAdditionalFilters(filters)
+
+  const apply = (next: TransactionFilters) => {
+    setDraft(next)
+    onApply(next)
+  }
 
   return (
     <form
       className="surface filter-bar"
       onSubmit={(event) => {
         event.preventDefault()
-        onApply(draft)
+        apply(draft)
       }}
     >
-      <label>
+      <label className="transaction-search-filter">
         ค้นหา
         <input
           onChange={(event) =>
@@ -317,131 +328,207 @@ function TransactionFilterBar({
           value={draft.search ?? ''}
         />
       </label>
-      <label>
-        ประเภท
-        <select
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              direction: (event.target.value || undefined) as
-                Direction | undefined,
-            }))
-          }
-          value={draft.direction ?? ''}
-        >
-          <option value="">ทั้งหมด</option>
-          <option value="expense">รายจ่าย</option>
-          <option value="income">รายรับ</option>
-        </select>
-      </label>
-      <label>
-        หมวดหมู่
-        <select
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              categoryId: event.target.value || undefined,
-            }))
-          }
-          value={draft.categoryId ?? ''}
-        >
-          <option value="">ทั้งหมด</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
+      <fieldset className="transaction-type-filter">
+        <legend>ประเภท</legend>
+        <div>
+          {(
+            [
+              ['', 'ทั้งหมด'],
+              ['income', 'รายรับ'],
+              ['expense', 'รายจ่าย'],
+            ] as const
+          ).map(([value, label]) => (
+            <label key={value}>
+              <input
+                checked={(draft.direction ?? '') === value}
+                name="transaction-direction-filter"
+                onChange={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    direction: value || undefined,
+                  }))
+                }
+                type="radio"
+                value={value}
+              />
+              <span aria-hidden="true">✓</span>
+              {label}
+            </label>
           ))}
-        </select>
-      </label>
-      <label>
-        สถานะ
-        <select
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              status: event.target.value as TransactionFilters['status'],
-            }))
-          }
-          value={draft.status ?? 'active'}
+        </div>
+      </fieldset>
+
+      <details className="additional-filters">
+        <summary>ตัวกรองเพิ่มเติม · {additionalFilterCount}</summary>
+        <div className="additional-filter-grid">
+          <label>
+            หมวดหมู่
+            <select
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  categoryId: event.target.value || undefined,
+                }))
+              }
+              value={draft.categoryId ?? ''}
+            >
+              <option value="">ทั้งหมด</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            สถานะ
+            <select
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  status: event.target.value as TransactionFilters['status'],
+                }))
+              }
+              value={draft.status ?? 'active'}
+            >
+              <option value="active">ใช้งาน</option>
+              <option value="cancelled">ยกเลิก</option>
+              <option value="superseded">ถูกแก้ไข</option>
+              <option value="all">ทั้งหมด</option>
+            </select>
+          </label>
+          <label>
+            วิธีชำระ
+            <select
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  paymentMethod: (event.target.value || undefined) as
+                    PaymentMethod | undefined,
+                }))
+              }
+              value={draft.paymentMethod ?? ''}
+            >
+              <option value="">ทั้งหมด</option>
+              {(Object.entries(paymentLabels) as [PaymentMethod, string][]).map(
+                ([method, label]) => (
+                  <option key={method} value={method}>
+                    {label}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <label>
+            บัตรเครดิต
+            <select
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  creditCardId: event.target.value || undefined,
+                }))
+              }
+              value={draft.creditCardId ?? ''}
+            >
+              <option value="">ทั้งหมด</option>
+              {creditCards.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {formatCardName(card)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            ตั้งแต่วันที่
+            <input
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  dateFrom: event.target.value || undefined,
+                }))
+              }
+              type="date"
+              value={draft.dateFrom ?? ''}
+            />
+          </label>
+          <label>
+            ถึงวันที่
+            <input
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  dateTo: event.target.value || undefined,
+                }))
+              }
+              type="date"
+              value={draft.dateTo ?? ''}
+            />
+          </label>
+        </div>
+      </details>
+
+      <div className="filter-actions">
+        <button
+          className="secondary-button"
+          onClick={() => apply(defaultTransactionFilters)}
+          type="button"
         >
-          <option value="active">ใช้งาน</option>
-          <option value="cancelled">ยกเลิก</option>
-          <option value="superseded">ถูกแก้ไข</option>
-          <option value="all">ทั้งหมด</option>
-        </select>
-      </label>
-      <label>
-        วิธีชำระ
-        <select
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              paymentMethod: (event.target.value || undefined) as
-                PaymentMethod | undefined,
-            }))
-          }
-          value={draft.paymentMethod ?? ''}
-        >
-          <option value="">ทั้งหมด</option>
-          {(Object.entries(paymentLabels) as [PaymentMethod, string][]).map(
-            ([method, label]) => (
-              <option key={method} value={method}>
-                {label}
-              </option>
-            ),
-          )}
-        </select>
-      </label>
-      <label>
-        บัตรเครดิต
-        <select
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              creditCardId: event.target.value || undefined,
-            }))
-          }
-          value={draft.creditCardId ?? ''}
-        >
-          <option value="">ทั้งหมด</option>
-          {creditCards.map((card) => (
-            <option key={card.id} value={card.id}>
-              {formatCardName(card)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        ตั้งแต่วันที่
-        <input
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              dateFrom: event.target.value || undefined,
-            }))
-          }
-          type="date"
-          value={draft.dateFrom ?? ''}
-        />
-      </label>
-      <label>
-        ถึงวันที่
-        <input
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              dateTo: event.target.value || undefined,
-            }))
-          }
-          type="date"
-          value={draft.dateTo ?? ''}
-        />
-      </label>
-      <button className="secondary-button" type="submit">
-        กรองรายการ
-      </button>
+          ล้างตัวกรอง
+        </button>
+        <button className="primary-button" type="submit">
+          กรองรายการ
+        </button>
+      </div>
+
+      <p className="applied-filters" aria-live="polite">
+        <strong>เงื่อนไขที่ใช้ · {appliedConditions.length}</strong>
+        <span>{appliedConditions.join(' · ')}</span>
+      </p>
     </form>
   )
+}
+
+function countAdditionalFilters(filters: TransactionFilters) {
+  return [
+    filters.categoryId,
+    filters.creditCardId,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.paymentMethod,
+    filters.status ?? 'active',
+  ].filter(Boolean).length
+}
+
+function describeFilters(
+  filters: TransactionFilters,
+  categories: readonly CategoryData[],
+  creditCards: readonly CreditCardData[],
+) {
+  const descriptions: string[] = []
+  if (filters.search) descriptions.push(`ค้นหา “${filters.search}”`)
+  if (filters.direction)
+    descriptions.push(filters.direction === 'income' ? 'รายรับ' : 'รายจ่าย')
+  if (filters.categoryId)
+    descriptions.push(
+      categories.find(({ id }) => id === filters.categoryId)?.name ??
+        'หมวดหมู่ที่เลือก',
+    )
+  descriptions.push(transactionStatusLabels[filters.status ?? 'active'])
+  if (filters.paymentMethod)
+    descriptions.push(paymentLabels[filters.paymentMethod])
+  if (filters.creditCardId)
+    descriptions.push(
+      formatCardName(
+        creditCards.find(({ id }) => id === filters.creditCardId) ?? {
+          maskedSuffix: null,
+          name: 'บัตรที่เลือก',
+        },
+      ),
+    )
+  if (filters.dateFrom)
+    descriptions.push(`ตั้งแต่ ${formatThaiDate(filters.dateFrom)}`)
+  if (filters.dateTo) descriptions.push(`ถึง ${formatThaiDate(filters.dateTo)}`)
+  return descriptions
 }
 
 function TransactionFormDialog({
@@ -533,7 +620,7 @@ function TransactionFormDialog({
             onClick={onClose}
             type="button"
           >
-            ×
+            <Icon name="x-lg" />
           </button>
         </div>
 
@@ -545,7 +632,28 @@ function TransactionFormDialog({
             )
           }}
         >
-          <fieldset className="segmented-field">
+          <label className="field transaction-amount-field">
+            จำนวนเงิน (บาท)
+            <input
+              aria-invalid={Boolean(form.formState.errors.amount)}
+              aria-describedby={
+                form.formState.errors.amount
+                  ? 'TransactionsPage-amount-error'
+                  : undefined
+              }
+              autoComplete="off"
+              inputMode="decimal"
+              placeholder="0.00"
+              {...form.register('amount')}
+            />
+            {form.formState.errors.amount ? (
+              <small id="TransactionsPage-amount-error" role="alert">
+                {form.formState.errors.amount.message}
+              </small>
+            ) : null}
+          </label>
+
+          <fieldset className="segmented-field transaction-direction-field">
             <legend>ประเภท</legend>
             <label>
               <input
@@ -575,26 +683,6 @@ function TransactionFormDialog({
               รายรับ
             </label>
           </fieldset>
-
-          <label className="field">
-            จำนวนเงิน (บาท)
-            <input
-              aria-invalid={Boolean(form.formState.errors.amount)}
-              aria-describedby={
-                form.formState.errors.amount
-                  ? 'TransactionsPage-amount-error'
-                  : undefined
-              }
-              inputMode="decimal"
-              placeholder="0.00"
-              {...form.register('amount')}
-            />
-            {form.formState.errors.amount ? (
-              <small id="TransactionsPage-amount-error" role="alert">
-                {form.formState.errors.amount.message}
-              </small>
-            ) : null}
-          </label>
           <label className="field">
             วันที่รายการ
             <input
@@ -748,11 +836,11 @@ function TransactionTable({
   return (
     <div className="desktop-transaction-table">
       <table>
+        <caption className="sr-only">รายการรายรับและรายจ่าย</caption>
         <thead>
           <tr>
             <th>วันที่</th>
-            <th>รายละเอียด</th>
-            <th>หมวดหมู่</th>
+            <th>รายละเอียดและหมวดหมู่</th>
             <th>วิธีชำระ</th>
             <th>สถานะ</th>
             <th className="amount-cell">จำนวนเงิน</th>
@@ -763,8 +851,13 @@ function TransactionTable({
           {items.map((item) => (
             <tr key={item.id}>
               <td>{formatThaiDate(item.transactionDate)}</td>
-              <td>{item.description}</td>
-              <td>{item.categoryName}</td>
+              <td>
+                <strong>{item.description}</strong>
+                <span>
+                  {item.direction === 'expense' ? 'รายจ่าย' : 'รายรับ'} ·{' '}
+                  {item.categoryName}
+                </span>
+              </td>
               <td>{formatPayment(item)}</td>
               <td>
                 <StatusLabel status={item.status} />
@@ -798,26 +891,27 @@ function TransactionCards({
       {items.map((item) => (
         <article className="transaction-card" key={item.id}>
           <div className="transaction-card-main">
-            <div>
-              <h2>{item.description}</h2>
-              <p>
-                {formatThaiDate(item.transactionDate)} · {item.categoryName}
-              </p>
-            </div>
+            <h2>{item.description}</h2>
             <strong className={item.direction}>
               {item.direction === 'expense' ? '−' : '+'}
               {formatThbMinor(item.amountMinor)}
             </strong>
           </div>
-          <div className="transaction-card-meta">
-            <span>{formatPayment(item)}</span>
+          <p className="transaction-card-meta">
+            {item.direction === 'expense' ? 'รายจ่าย' : 'รายรับ'} ·{' '}
+            {item.categoryName} · {formatPayment(item)}
+          </p>
+          <div className="transaction-card-status">
+            <span>{formatThaiDate(item.transactionDate)}</span>
             <StatusLabel status={item.status} />
+          </div>
+          {item.status === 'active' ? (
             <TransactionActions
               item={item}
               onCancel={onCancel}
               onCorrect={onCorrect}
             />
-          </div>
+          ) : null}
         </article>
       ))}
     </div>
@@ -839,6 +933,7 @@ function TransactionActions({
   return (
     <div className="row-actions">
       <button
+        aria-label={`แก้ไขรายการ ${item.description}`}
         className="text-button"
         onClick={() => onCorrect(item)}
         type="button"
@@ -846,6 +941,7 @@ function TransactionActions({
         แก้ไข
       </button>
       <button
+        aria-label={`ยกเลิกรายการ ${item.description}`}
         className="text-button danger"
         onClick={() => onCancel(item)}
         type="button"

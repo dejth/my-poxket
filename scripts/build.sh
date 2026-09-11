@@ -74,7 +74,7 @@ function inspect(dir) {
     if (entry.isDirectory()) { inspect(name); continue }
     if (!entry.isFile()) throw Error(`Unexpected entry: ${name}`)
     if (!name.startsWith('node_modules/')) {
-      const allowed = /^(package(-lock)?\.json|REVISION|start\.cjs|public\/(index\.html|assets\/[\w.-]+\.(js|css|woff2))|apps\/(api|web)\/package\.json|apps\/api\/dist\/[\w/.-]+\.js|apps\/api\/drizzle\/(\d{4}_[\w]+\.sql|meta\/_journal\.json)|packages\/domain\/(package\.json|dist\/[\w-]+\.js))$/
+      const allowed = /^(package(-lock)?\.json|REVISION|start\.cjs|public\/(index\.html|assets\/[\w.-]+\.(js|css|woff2?))|apps\/(api|web)\/package\.json|apps\/api\/dist\/[\w/.-]+\.js|apps\/api\/drizzle\/(\d{4}_[\w]+\.sql|meta\/_journal\.json)|packages\/domain\/(package\.json|dist\/[\w-]+\.js))$/
       if (!allowed.test(name) || /\.(test|spec)\./.test(name)) throw Error(`Unexpected file: ${name}`)
     }
     entries.push(`${createHash('sha256').update(fs.readFileSync(name)).digest('hex')}  ${name}`)

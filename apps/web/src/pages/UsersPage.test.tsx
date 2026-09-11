@@ -71,6 +71,12 @@ describe('user management', () => {
     vi.stubGlobal('fetch', fetch)
     renderUsers()
     expect(await screen.findByText('Example Person')).toBeInTheDocument()
+    const add = screen.getByRole('button', { name: 'เพิ่มผู้ใช้' })
+    add.focus()
+    fireEvent.click(add)
+    expect(
+      screen.getByRole('dialog', { name: 'เพิ่มผู้ใช้' }),
+    ).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('ชื่อ'), {
       target: { value: 'New Person' },
     })
@@ -101,6 +107,8 @@ describe('user management', () => {
     )
     expect(await screen.findByText('บันทึกผู้ใช้แล้ว')).toBeInTheDocument()
     expect(password).toHaveValue('')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(add).toHaveFocus()
   })
 
   it('edits without sending a blank password and keeps input on a server error', async () => {
@@ -122,6 +130,9 @@ describe('user management', () => {
       await screen.findByRole('button', { name: 'แก้ไข Example Person' }),
     )
     expect(screen.getByLabelText('Password ใหม่')).toHaveValue('')
+    expect(screen.getByLabelText('Password ใหม่')).toHaveAccessibleDescription(
+      'เว้นว่างเพื่อใช้รหัสผ่านเดิม หากเปลี่ยน ผู้ใช้นี้ต้องเข้าสู่ระบบใหม่',
+    )
     fireEvent.change(screen.getByLabelText('Username'), {
       target: { value: 'taken-name' },
     })
@@ -139,5 +150,36 @@ describe('user management', () => {
         body: JSON.stringify({ name: user.name, username: 'taken-name' }),
       }),
     )
+  })
+
+  it('reports validation errors as alerts without exposing the password', async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ items: [user] }),
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    renderUsers()
+    await screen.findByText('Example Person')
+    fireEvent.click(screen.getByRole('button', { name: 'เพิ่มผู้ใช้' }))
+    fireEvent.change(screen.getByLabelText('ชื่อ'), {
+      target: { value: 'Example' },
+    })
+    fireEvent.change(screen.getByLabelText('Username'), {
+      target: { value: 'ab' },
+    })
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'fictional-password-1234' },
+    })
+    fireEvent.submit(
+      screen.getByRole('button', { name: 'บันทึกผู้ใช้' }).closest('form')!,
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'กรุณาระบุชื่อและชื่อผู้ใช้อย่างน้อย 3 ตัวอักษร',
+    )
+    expect(
+      screen.queryByText('fictional-password-1234'),
+    ).not.toBeInTheDocument()
   })
 })

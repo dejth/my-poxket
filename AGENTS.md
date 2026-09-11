@@ -6,11 +6,11 @@ The root agent is the Lead and Integrator and remains accountable for scope, cor
 
 ## Before changing code
 
-1. Read `AGENTS.md`, `README.md`, `PROJECT.md`, `CONTRIBUTING.md`, the linked Issue when one exists, and relevant ADRs.
-2. Inspect the current branch, working tree, recent history, package scripts, runtime configuration, database migrations, and deployment files.
+1. Read `AGENTS.md`, the linked Issue when one exists, and the relevant sections of `README.md`, `PROJECT.md`, `CONTRIBUTING.md`, and applicable ADRs. Read these files in full only when necessary to establish task context or requirements.
+2. Inspect the current branch, working tree, recent relevant history, package scripts, and only the runtime configuration, database migrations, and deployment files relevant to the task. Do not inspect unrelated infrastructure or configuration by default.
 3. Preserve unrelated and pre-existing changes. Never discard, overwrite, reformat, or include them in a task without approval.
 4. Confirm the objective, in-scope and out-of-scope behavior, acceptance criteria, risks, dependencies, and validation plan.
-5. Identify whether the task is planning, implementation, UAT support, Git delivery, database migration, or hosting provider deployment. Owner UAT acceptance authorizes the develop delivery sequence defined below; production actions remain separately authorized.
+5. Identify whether the task is planning, implementation, UAT support, Git delivery, database migration, or hosting provider deployment. Owner UAT acceptance authorizes commit/push/PR only as defined below; merge and cleanup require a separate user instruction after the user checks CI. Production actions remain separately authorized.
 6. If referenced project files do not exist, report that fact and create only what the approved task requires.
 
 Do not guess missing financial rules, hosting capabilities, database coordinates, domains, GitHub identities, or production configuration. Ask when a missing choice would materially change the result.
@@ -308,7 +308,7 @@ Keep small, localized, and tightly coupled work in one agent. Never create a sub
 10. The Lead inspects and integrates every delegated result.
 11. Run required checks against the final integrated revision.
 
-Multi-agent use does not expand authorization. Agents must not commit, push, create a remote, create or mark a PR Ready, merge, close an Issue, delete branches, publish, deploy, change DNS, alter hosting provider configuration, create databases/users, write secrets, apply remote migrations, or change infrastructure without the user's authorization. Owner UAT acceptance supplies authorization for the develop delivery sequence below; the Lead remains responsible for executing or explicitly delegating it.
+Multi-agent use does not expand authorization. Agents must not commit, push, create a remote, create or mark a PR Ready, merge, close an Issue, delete branches, publish, deploy, change DNS, alter hosting provider configuration, create databases/users, write secrets, apply remote migrations, or change infrastructure without the user's authorization. Owner UAT acceptance supplies authorization for commit/push/PR only; merge, Issue closure, and branch cleanup require a separate user instruction after the user checks CI. The Lead remains responsible for executing or explicitly delegating the authorized steps below.
 
 ### Quota-aware execution and UAT
 
@@ -329,8 +329,11 @@ Multi-agent use does not expand authorization. Agents must not commit, push, cre
 - Use the long-lived hierarchy `main` → `release` → `develop`. Create focused `tasks/<issue>-<slug>` branches from `develop`, merge them back into `develop` through CI-gated pull requests, then use separately approved promotions from `develop` to `release` and from `release` to `main`.
 - Treat `main` as the production release line once deployment automation is configured.
 - Use one GitHub Issue per feature or defect when GitHub governance is enabled.
-- Never force-push, rewrite shared history, or bypass protection without explicit approval. Owner UAT acceptance authorizes cleanup of verified merged task branches only; preserve unrelated branches and uncommitted work.
-- If conflicts occur, report them and wait. Do not invent an alternate release path.
+- Never force-push, rewrite shared history, or bypass protection without explicit approval. A separate user merge/cleanup instruction authorizes cleanup of verified merged task branches only; preserve unrelated branches and uncommitted work.
+- If conflicts occur, report them and stop. Do not invent an alternate release path.
+- After creating or updating a PR, report the changes, local test results, and PR URL/number, then STOP immediately. The user checks CI on GitHub. Do not wait for CI, poll or repeatedly check CI status, loop on GitHub Actions, enable auto-merge, or merge even if CI passes.
+- Resume merge/close/cleanup only on a separate user instruction after the user confirms CI passed, for example: `CI passed. Merge PR #xx, close Issue #xx, and clean up the branch.` Check the necessary current PR status once before merging, as defined in step 6 below. Do not poll CI further, including after merge, unless the user explicitly requests it.
+- If the user reports a CI failure and asks for a fix, inspect the relevant failure, fix it, run the required local checks, and push to the existing PR. Report the fix, local test results, and PR URL/number, then STOP again for the user to check CI.
 
 ## Delivery checkpoints
 
@@ -339,15 +342,15 @@ Keep these stages explicit and report evidence at each stage:
 1. **Plan approved** — objective, scope, acceptance criteria, risks, stack/runtime impact, and validation agreed.
 2. **Implementation complete** — focused code and targeted tests completed; no publish action implied.
 3. **Local validation complete** — full required checks run against the integrated revision.
-4. **UAT** — after implementation and local validation, give the user a concise manual UAT checklist. Acceptance such as “pass”, “ผ่าน”, “ปิดงานได้”, or equivalent authorizes the complete develop delivery sequence in steps 5–7 without asking again.
-5. **Commit/push/PR** — after accepted UAT, commit the approved scope, push the task branch, and create or update its PR into `develop`.
-6. **CI-gated merge** — wait for all required CI checks and review requirements to pass for the current PR head, mark Ready if needed, and merge into `develop`. Fix failures within scope and rerun checks; do not bypass protections.
-7. **Cleanup and Issue synchronization** — verify the merged revision and develop CI, synchronize local `develop`, delete only verified merged task branches, and update/close the related Issues and roadmap so their status matches delivery. Preserve unrelated work and stop on conflicts.
+4. **UAT** — after implementation and local validation, give the user a concise manual UAT checklist. Acceptance such as “pass”, “ผ่าน”, “ปิดงานได้”, or equivalent authorizes step 5 only without asking again. It does not authorize merge, Issue closure, or branch cleanup.
+5. **Commit/push/PR** — after accepted UAT and required local validation, commit the approved scope, push the task branch, and create or update its PR into `develop` (or the target of a separately approved promotion). Report the changes, local test results, and PR URL/number, then STOP for the user to check CI.
+6. **CI-gated merge** — only after a separate user merge instruction confirming CI passed, check the current PR head, target branch, required CI checks, review requirements, and mergeability once. If any gate is pending, failed, missing, or blocked, report it and STOP; do not wait, retry in a loop, or bypass protections. Otherwise, mark Ready if needed and merge the verified head into the approved target branch under repository protections.
+7. **Cleanup and Issue synchronization** — after the authorized merge, verify the merged revision, synchronize the local target branch, delete only verified merged local and remote task branches as appropriate, and update/close the related Issues and roadmap so their status matches delivery. Preserve unrelated work and stop on conflicts. Summarize the result and STOP; do not check or poll post-merge CI unless explicitly instructed.
 8. **Production promotion** — separate approved release flow.
 9. **Production deployment and production migration** — explicit approval after build, migration review, backup verification, and deployment plan.
 10. **Post-deploy verification** — verify deployed revision, authentication, database schema, smoke tests, logs, and local synchronization.
 
-“ปิด task” or “ปิดงานได้” after UAT authorizes the develop delivery sequence above. It does not authorize archiving the Codex conversation, production promotion, deployment, or production migration.
+“ปิด task” or “ปิดงานได้” after UAT authorizes commit/push/PR only. Merge, Issue closure, and branch cleanup require the separate instruction in step 6 after the user checks CI. It does not authorize archiving the Codex conversation, production promotion, deployment, or production migration.
 
 ## Production deployment rules
 
