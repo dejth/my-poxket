@@ -6,9 +6,11 @@ import { Link } from 'react-router-dom'
 import { ActionNotice } from '../app/ActionNotice'
 import {
   getDashboardSummary,
+  getTransactions,
   setCreditCardStatementPayment,
   type DashboardHistoryData,
   type DashboardPayableData,
+  type TransactionData,
 } from '../app/api'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 import {
@@ -33,6 +35,17 @@ export function DashboardPage() {
   const summaryQuery = useQuery({
     queryFn: () => getDashboardSummary(session.csrfToken, period),
     queryKey: ['dashboard-summary', period],
+  })
+  const recentTransactionsQuery = useQuery({
+    enabled: summaryQuery.data?.period === period,
+    queryFn: () =>
+      getTransactions({
+        dateFrom: summaryQuery.data!.periodStart,
+        dateTo: summaryQuery.data!.periodEnd,
+        pageSize: 5,
+        status: 'active',
+      }),
+    queryKey: ['transactions', 'dashboard-recent', period],
   })
   const paymentMutation = useMutation({
     mutationFn: ({
@@ -69,6 +82,14 @@ export function DashboardPage() {
     },
   })
   const summary = summaryQuery.data
+  const expenseCategories =
+    summary?.activity.categories.filter(
+      (category) => category.direction === 'expense',
+    ) ?? []
+  const incomeCategories =
+    summary?.activity.categories.filter(
+      (category) => category.direction === 'income',
+    ) ?? []
 
   useEffect(() => {
     const dialog = paymentDialogRef.current
@@ -156,71 +177,6 @@ export function DashboardPage() {
             </div>
           </section>
 
-          <section className="dashboard-grid">
-            <section
-              className="surface dashboard-panel"
-              aria-labelledby="categories-title"
-            >
-              <div className="section-heading">
-                <div>
-                  <h2 id="categories-title">แยกตามหมวดหมู่</h2>
-                  <p>รวมจากรายการที่ยังใช้งานอยู่</p>
-                </div>
-              </div>
-              {summary.activity.categories.length === 0 ? (
-                <p className="muted-state">ยังไม่มีกิจกรรมในเดือนนี้</p>
-              ) : (
-                <ul className="dashboard-list category-breakdown">
-                  {summary.activity.categories.map((category) => (
-                    <li key={`${category.direction}:${category.categoryId}`}>
-                      <div>
-                        <strong>{category.categoryName}</strong>
-                        <small>
-                          {category.direction === 'income'
-                            ? 'รายรับ'
-                            : 'รายจ่าย'}
-                        </small>
-                      </div>
-                      <strong>{formatThbMinor(category.amountMinor)}</strong>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section
-              className="surface dashboard-panel"
-              aria-labelledby="cash-flow-title"
-            >
-              <div className="section-heading">
-                <div>
-                  <h2 id="cash-flow-title">กระแสเงินสด</h2>
-                  <p>ไม่รวมยอดซื้อบัตรจนกว่าจะจ่ายรอบบัญชี</p>
-                </div>
-              </div>
-              <dl className="cash-flow-summary">
-                <div
-                  className={
-                    BigInt(summary.cashFlow.netMinor) < 0n
-                      ? 'is-negative'
-                      : 'is-positive'
-                  }
-                >
-                  <dt>เงินเข้า</dt>
-                  <dd>{formatThbMinor(summary.cashFlow.inflowMinor)}</dd>
-                </div>
-                <div>
-                  <dt>เงินออก</dt>
-                  <dd>{formatThbMinor(summary.cashFlow.outflowMinor)}</dd>
-                </div>
-                <div>
-                  <dt>คงเหลือสุทธิ</dt>
-                  <dd>{formatThbMinor(summary.cashFlow.netMinor)}</dd>
-                </div>
-              </dl>
-            </section>
-          </section>
-
           <section
             className="dashboard-section"
             aria-labelledby="payables-title"
@@ -264,6 +220,117 @@ export function DashboardPage() {
                 </ul>
               )}
             </div>
+          </section>
+
+          <section
+            className="dashboard-section"
+            aria-labelledby="recent-transactions-title"
+          >
+            <div className="section-heading dashboard-section-heading">
+              <div>
+                <p className="eyebrow">ตามวันที่ทำรายการ</p>
+                <h2 id="recent-transactions-title">รายการล่าสุดในเดือนนี้</h2>
+              </div>
+              <Link className="dashboard-item-link" to="/transactions">
+                ดูทั้งหมด
+              </Link>
+            </div>
+            <div className="surface dashboard-panel">
+              {recentTransactionsQuery.isPending ? (
+                <p className="muted-state" aria-busy="true" role="status">
+                  กำลังโหลดรายการล่าสุด…
+                </p>
+              ) : recentTransactionsQuery.isError ? (
+                <QueryError
+                  message={recentTransactionsQuery.error.message}
+                  onRetry={() => {
+                    void recentTransactionsQuery.refetch()
+                  }}
+                />
+              ) : recentTransactionsQuery.data.items.length === 0 ? (
+                <p className="muted-state">ยังไม่มีรายการในเดือนนี้</p>
+              ) : (
+                <ul className="dashboard-list">
+                  {recentTransactionsQuery.data.items.map((item) => (
+                    <RecentTransactionItem item={item} key={item.id} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          <section className="dashboard-grid">
+            <section
+              className="surface dashboard-panel"
+              aria-labelledby="categories-title"
+            >
+              <div className="section-heading">
+                <div>
+                  <h2 id="categories-title">สัดส่วนรายจ่าย</h2>
+                  <p>เทียบกับรายจ่ายทั้งหมดในเดือนที่เลือก</p>
+                </div>
+              </div>
+              {expenseCategories.length === 0 ||
+              BigInt(summary.activity.expenseMinor) === 0n ? (
+                <p className="muted-state">ยังไม่มีรายจ่ายในเดือนนี้</p>
+              ) : (
+                <ul className="dashboard-list category-proportions">
+                  {expenseCategories.map((category) => (
+                    <CategoryProportion
+                      amountMinor={category.amountMinor}
+                      key={category.categoryId}
+                      name={category.categoryName}
+                      totalMinor={summary.activity.expenseMinor}
+                    />
+                  ))}
+                </ul>
+              )}
+              {incomeCategories.length > 0 ? (
+                <div className="income-categories">
+                  <h3>รายรับตามหมวดหมู่</h3>
+                  <ul className="dashboard-list category-breakdown">
+                    {incomeCategories.map((category) => (
+                      <li key={category.categoryId}>
+                        <strong>{category.categoryName}</strong>
+                        <strong>{formatThbMinor(category.amountMinor)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+
+            <section
+              className="surface dashboard-panel"
+              aria-labelledby="cash-flow-title"
+            >
+              <div className="section-heading">
+                <div>
+                  <h2 id="cash-flow-title">กระแสเงินสด</h2>
+                  <p>ตามวันที่จ่าย ไม่รวมยอดซื้อบัตรจนกว่าจะจ่ายรอบบัญชี</p>
+                </div>
+              </div>
+              <dl className="cash-flow-summary">
+                <div
+                  className={
+                    BigInt(summary.cashFlow.netMinor) < 0n
+                      ? 'is-negative'
+                      : 'is-positive'
+                  }
+                >
+                  <dt>เงินเข้า</dt>
+                  <dd>{formatThbMinor(summary.cashFlow.inflowMinor)}</dd>
+                </div>
+                <div>
+                  <dt>เงินออก</dt>
+                  <dd>{formatThbMinor(summary.cashFlow.outflowMinor)}</dd>
+                </div>
+                <div>
+                  <dt>สุทธิกระแสเงินสด</dt>
+                  <dd>{formatThbMinor(summary.cashFlow.netMinor)}</dd>
+                </div>
+              </dl>
+            </section>
           </section>
 
           <section
@@ -408,6 +475,53 @@ export function DashboardPage() {
   )
 }
 
+function CategoryProportion({
+  amountMinor,
+  name,
+  totalMinor,
+}: {
+  readonly amountMinor: string
+  readonly name: string
+  readonly totalMinor: string
+}) {
+  const percentageTenths =
+    (BigInt(amountMinor) * 1000n + BigInt(totalMinor) / 2n) / BigInt(totalMinor)
+  const percentage = Number(percentageTenths) / 10
+
+  return (
+    <li>
+      <div className="category-proportion-summary">
+        <strong>{name}</strong>
+        <span>{formatPercentage(percentageTenths)}</span>
+      </div>
+      <strong>{formatThbMinor(amountMinor)}</strong>
+      <div className="category-proportion-track" aria-hidden="true">
+        <span style={{ width: `${percentage}%` }} />
+      </div>
+    </li>
+  )
+}
+
+function RecentTransactionItem({ item }: { readonly item: TransactionData }) {
+  return (
+    <li>
+      <div className="dashboard-item-main">
+        <strong>{item.description}</strong>
+        <strong className={item.direction}>
+          {item.direction === 'expense' ? '−' : '+'}
+          {formatThbMinor(item.amountMinor)}
+        </strong>
+      </div>
+      <div className="dashboard-item-meta">
+        <span>
+          {formatThaiDate(item.transactionDate)} · {item.categoryName} ·{' '}
+          {item.direction === 'income' ? 'รายรับ' : 'รายจ่าย'}
+        </span>
+      </div>
+    </li>
+  )
+}
+
 function Metric({
   hint,
   label,
@@ -440,18 +554,29 @@ function PayableItem({
       <div className="dashboard-item-main">
         <div>
           <strong>{item.title}</strong>
-          <small>{item.context}</small>
         </div>
         <strong>{formatThbMinor(item.amountMinor)}</strong>
       </div>
       <div className="dashboard-item-meta">
+        <span className={`source-badge is-${item.source}`}>{item.context}</span>
         <span className={`payable-status is-${item.status}`}>
-          {item.status === 'overdue' ? 'เกินกำหนด' : 'ยังไม่จ่าย'}
+          {item.status === 'overdue' ? (
+            <>
+              <span aria-hidden="true">△</span> เกินกำหนด
+            </>
+          ) : (
+            'ยังไม่จ่าย'
+          )}
         </span>
-        <span>
-          {item.source === 'credit_card_statement' && item.officialDueDate
-            ? `วางแผน ${formatThaiDate(item.dueDate)} · ครบกำหนด ${formatThaiDate(item.officialDueDate)}`
-            : formatThaiDate(item.dueDate)}
+        <span className="dashboard-item-date">
+          {item.source === 'credit_card_statement' && item.officialDueDate ? (
+            <>
+              <span>วางแผน {formatThaiDate(item.dueDate)}</span>
+              <span>ครบกำหนด {formatThaiDate(item.officialDueDate)}</span>
+            </>
+          ) : (
+            <span>กำหนด {formatThaiDate(item.dueDate)}</span>
+          )}
         </span>
         {item.source === 'credit_card_statement' ? (
           <button
@@ -492,15 +617,24 @@ function HistoryItem({
       <div className="dashboard-item-main">
         <div>
           <strong>{item.title}</strong>
-          <small>{item.context}</small>
         </div>
         <strong>{formatThbMinor(item.amountMinor)}</strong>
       </div>
       <div className="dashboard-item-meta">
+        <span className={`source-badge is-${item.source}`}>{item.context}</span>
         <span className={`payable-status is-${item.status}`}>
-          {item.status === 'paid' ? 'จ่ายแล้ว' : 'ยกเลิก'}
+          {item.status === 'paid' ? (
+            <>
+              <span aria-hidden="true">✓</span> จ่ายแล้ว
+            </>
+          ) : (
+            'ยกเลิก'
+          )}
         </span>
-        <span>{formatThaiDate(item.date)}</span>
+        <span>
+          {item.status === 'paid' ? 'จ่าย' : 'ยกเลิก'}{' '}
+          {formatThaiDate(item.date)}
+        </span>
         {item.source === 'credit_card_statement' && item.status === 'paid' ? (
           <button
             className="text-button"
@@ -527,4 +661,10 @@ function formatThaiPeriod(period: string) {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
   }).format(new Date(`${period}-01T00:00:00+07:00`))
+}
+
+function formatPercentage(tenths: bigint) {
+  return tenths % 10n === 0n
+    ? `${tenths / 10n}%`
+    : `${tenths / 10n}.${tenths % 10n}%`
 }

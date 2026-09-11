@@ -12,6 +12,8 @@ import {
   type Direction,
 } from '../app/api'
 import { ActionNotice } from '../app/ActionNotice'
+import { Icon } from '../app/Icon'
+import { Modal } from '../app/Modal'
 import { useAuthenticatedContext } from '../app/authenticated-context'
 
 const CATEGORIES_QUERY_KEY = ['categories'] as const
@@ -33,11 +35,13 @@ export function CategoriesPage() {
     resolver: zodResolver(categorySchema),
   })
   const [notice, setNotice] = useState<string | null>(null)
+  const [isFormOpen, setFormOpen] = useState(false)
   const createMutation = useMutation({
     mutationFn: (input: CategoryFormValues) =>
       createCategory(session.csrfToken, input),
     onSuccess: async () => {
       setNotice('เพิ่มหมวดหมู่แล้ว')
+      setFormOpen(false)
       form.reset({ direction: form.getValues('direction'), name: '' })
       await queryClient.invalidateQueries({ queryKey: CATEGORIES_QUERY_KEY })
     },
@@ -57,137 +61,175 @@ export function CategoriesPage() {
 
   return (
     <main className="page-shell">
-      <header className="page-header">
-        <p className="eyebrow">ตั้งค่ารายการ</p>
-        <h1>หมวดหมู่</h1>
-        <p>แยกรายรับและรายจ่ายให้ค้นหาและสรุปผลได้ชัดเจน</p>
+      <header className="page-header page-header-actions">
+        <div>
+          <p className="eyebrow">ตั้งค่ารายการ</p>
+          <h1>หมวดหมู่</h1>
+          <p>แยกรายรับและรายจ่ายให้ค้นหาและสรุปผลได้ชัดเจน</p>
+        </div>
+        <button
+          className="primary-button action-button"
+          onClick={() => {
+            createMutation.reset()
+            form.reset({ direction: 'expense', name: '' })
+            setFormOpen(true)
+          }}
+          type="button"
+        >
+          <Icon name="plus-lg" /> เพิ่มหมวดหมู่
+        </button>
       </header>
 
       <ActionNotice message={notice} setMessage={setNotice} />
 
-      <section className="category-layout">
-        <form
-          className="surface compact-form"
-          onSubmit={(event) => {
-            void form.handleSubmit((values) => createMutation.mutate(values))(
-              event,
-            )
+      {isFormOpen ? (
+        <Modal
+          labelledBy="category-form-title"
+          onClose={() => {
+            if (!createMutation.isPending) setFormOpen(false)
           }}
         >
-          <div className="section-heading">
-            <h2>เพิ่มหมวดหมู่</h2>
-          </div>
-
-          <fieldset className="segmented-field">
-            <legend>ประเภท</legend>
-            <label>
-              <input
-                type="radio"
-                value="expense"
-                {...form.register('direction')}
-              />
-              รายจ่าย
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="income"
-                {...form.register('direction')}
-              />
-              รายรับ
-            </label>
-          </fieldset>
-
-          <label className="field">
-            ชื่อหมวดหมู่
-            <input
-              aria-invalid={Boolean(form.formState.errors.name)}
-              aria-describedby={
-                form.formState.errors.name
-                  ? 'CategoriesPage-name-error'
-                  : undefined
-              }
-              autoComplete="off"
-              placeholder="เช่น อาหาร (ข้อมูลสมมติ)"
-              {...form.register('name')}
-            />
-            {form.formState.errors.name ? (
-              <small id="CategoriesPage-name-error" role="alert">
-                {form.formState.errors.name.message}
-              </small>
-            ) : null}
-          </label>
-
-          {createMutation.isError ? (
-            <p className="form-error" role="alert">
-              {createMutation.error.message}
-            </p>
-          ) : null}
-
-          {statusMutation.isError ? (
-            <p className="form-error" role="alert">
-              {statusMutation.error.message}
-            </p>
-          ) : null}
-
-          <button
-            className="primary-button"
-            disabled={createMutation.isPending}
-            type="submit"
+          <form
+            aria-labelledby="category-form-title"
+            className="form-dialog transaction-form"
+            onSubmit={(event) => {
+              void form.handleSubmit((values) => createMutation.mutate(values))(
+                event,
+              )
+            }}
           >
-            {createMutation.isPending ? 'กำลังเพิ่ม…' : 'เพิ่มหมวดหมู่'}
-          </button>
-        </form>
-
-        <section
-          className="surface category-list"
-          aria-labelledby="category-list-title"
-        >
-          <div className="section-heading">
-            <div>
-              <h2 id="category-list-title">หมวดหมู่ทั้งหมด</h2>
-              <p>{categories.length} รายการ</p>
+            <div className="dialog-heading">
+              <h2 id="category-form-title">เพิ่มหมวดหมู่</h2>
+              <button
+                aria-label="ปิด"
+                className="icon-button"
+                onClick={() => setFormOpen(false)}
+                type="button"
+              >
+                <Icon name="x-lg" />
+              </button>
             </div>
-          </div>
 
-          {categoriesQuery.isPending ? (
-            <p className="muted-state" aria-busy="true" role="status">
-              กำลังโหลดหมวดหมู่…
-            </p>
-          ) : categoriesQuery.isError ? (
-            <QueryError
-              message={categoriesQuery.error.message}
-              onRetry={() => {
-                void categoriesQuery.refetch()
-              }}
-            />
-          ) : categories.length === 0 ? (
-            <p className="muted-state">ยังไม่มีหมวดหมู่ เพิ่มรายการแรกได้เลย</p>
-          ) : (
-            <div className="category-groups">
-              {(['expense', 'income'] as const).map((direction) => (
-                <CategoryGroup
-                  direction={direction}
-                  isUpdating={statusMutation.isPending}
-                  key={direction}
-                  items={categories.filter(
-                    (category) => category.direction === direction,
-                  )}
-                  onToggle={(id, isActive) => {
-                    if (
-                      isActive ||
-                      window.confirm(
-                        'ปิดหมวดหมู่นี้ใช่หรือไม่ ประวัติรายการเดิมจะยังคงอยู่',
-                      )
-                    ) {
-                      statusMutation.mutate({ id, isActive })
-                    }
-                  }}
+            <fieldset className="segmented-field">
+              <legend>ประเภท</legend>
+              <label>
+                <input
+                  type="radio"
+                  value="expense"
+                  {...form.register('direction')}
                 />
-              ))}
+                รายจ่าย
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  value="income"
+                  {...form.register('direction')}
+                />
+                รายรับ
+              </label>
+            </fieldset>
+
+            <label className="field">
+              ชื่อหมวดหมู่
+              <input
+                aria-invalid={Boolean(form.formState.errors.name)}
+                aria-describedby={
+                  form.formState.errors.name
+                    ? 'CategoriesPage-name-error'
+                    : undefined
+                }
+                autoComplete="off"
+                placeholder="เช่น อาหาร (ข้อมูลสมมติ)"
+                {...form.register('name')}
+              />
+              {form.formState.errors.name ? (
+                <small id="CategoriesPage-name-error" role="alert">
+                  {form.formState.errors.name.message}
+                </small>
+              ) : null}
+            </label>
+
+            {createMutation.isError ? (
+              <p className="form-error" role="alert">
+                {createMutation.error.message}
+              </p>
+            ) : null}
+
+            <div className="dialog-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setFormOpen(false)}
+                type="button"
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="primary-button"
+                disabled={createMutation.isPending}
+                type="submit"
+              >
+                {createMutation.isPending ? 'กำลังเพิ่ม…' : 'เพิ่มหมวดหมู่'}
+              </button>
             </div>
-          )}
-        </section>
+          </form>
+        </Modal>
+      ) : null}
+
+      <section
+        className="surface category-list"
+        aria-labelledby="category-list-title"
+      >
+        <div className="section-heading">
+          <div>
+            <h2 id="category-list-title">หมวดหมู่ทั้งหมด</h2>
+            <p>{categories.length} รายการ</p>
+          </div>
+        </div>
+
+        {statusMutation.isError ? (
+          <p className="inline-error" role="alert">
+            {statusMutation.error.message}
+          </p>
+        ) : null}
+
+        {categoriesQuery.isPending ? (
+          <p className="muted-state" aria-busy="true" role="status">
+            กำลังโหลดหมวดหมู่…
+          </p>
+        ) : categoriesQuery.isError ? (
+          <QueryError
+            message={categoriesQuery.error.message}
+            onRetry={() => {
+              void categoriesQuery.refetch()
+            }}
+          />
+        ) : categories.length === 0 ? (
+          <p className="muted-state">ยังไม่มีหมวดหมู่ เพิ่มรายการแรกได้เลย</p>
+        ) : (
+          <div className="category-groups">
+            {(['expense', 'income'] as const).map((direction) => (
+              <CategoryGroup
+                direction={direction}
+                isUpdating={statusMutation.isPending}
+                key={direction}
+                items={categories.filter(
+                  (category) => category.direction === direction,
+                )}
+                onToggle={(id, isActive) => {
+                  if (
+                    isActive ||
+                    window.confirm(
+                      'ปิดหมวดหมู่นี้ใช่หรือไม่ ประวัติรายการเดิมจะยังคงอยู่',
+                    )
+                  ) {
+                    statusMutation.mutate({ id, isActive })
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
     </main>
   )
@@ -208,9 +250,13 @@ function CategoryGroup({
   }[]
   readonly onToggle: (id: string, isActive: boolean) => void
 }) {
+  const titleId = `category-group-${direction}`
   return (
-    <section>
-      <h3>{direction === 'expense' ? 'รายจ่าย' : 'รายรับ'}</h3>
+    <section aria-labelledby={titleId}>
+      <div className="category-group-heading">
+        <h3 id={titleId}>{direction === 'expense' ? 'รายจ่าย' : 'รายรับ'}</h3>
+        <span>{items.length} รายการ</span>
+      </div>
       {items.length === 0 ? (
         <p className="muted-copy">ยังไม่มีหมวดหมู่ประเภทนี้</p>
       ) : (
@@ -218,10 +264,15 @@ function CategoryGroup({
           {items.map((item) => (
             <li key={item.id}>
               <div>
-                <span>{item.name}</span>
-                <small>{item.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}</small>
+                <strong className="category-item-name">{item.name}</strong>
+                <span
+                  className={`status-label ${item.isActive ? 'active' : 'stopped'}`}
+                >
+                  {item.isActive ? 'ใช้งานอยู่' : 'ปิดใช้งาน'}
+                </span>
               </div>
               <button
+                aria-label={`${item.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}หมวดหมู่ ${item.name}`}
                 className="small-button"
                 disabled={isUpdating}
                 onClick={() => onToggle(item.id, !item.isActive)}

@@ -198,3 +198,11 @@ CI-gated merge into develop, verified cleanup, and Issue/roadmap synchronization
 without further approval. Browser/computer use is reserved for genuine necessity
 or an explicit request. Production promotion, deployment, and production
 migration still require separate approval.
+
+## UX/UI refresh follow-up
+
+[UX/UI refresh plan](docs/plans/ux-refresh.md) records the next Calm Ledger
+iteration, tracked by GitHub Issue #21 and its atomic sub-issues. This is a
+planning deliverable; UI implementation and owner UAT remain pending. Start with
+the design specification, then shared styles, focused page changes, and integrated
+manual UAT. Preserve the existing financial rules and completed Issue #7 behavior.
