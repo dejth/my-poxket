@@ -871,16 +871,20 @@ describe('finance pages', () => {
     expect(
       screen.queryByRole('dialog', { name: 'สร้างแผนผ่อน' }),
     ).not.toBeInTheDocument()
-    expect(screen.getByText('1/2')).toBeInTheDocument()
+    expect(screen.getByText('1 จาก 2 งวด')).toBeInTheDocument()
     expect(screen.getByText('2/2 · ยังไม่จ่าย')).toBeInTheDocument()
+    expect(screen.getAllByText(/ยอดตามแผน/).length).toBeGreaterThan(0)
+    expect(screen.getByText('ยอดจ่ายจริง')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'บันทึกว่าจ่ายแล้ว' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /บันทึกว่าจ่ายแล้ว งวด 2\/2/ }),
+    )
     expect(screen.getByRole('dialog', { name: 'งวด 2/2' })).toBeInTheDocument()
     expect(screen.getAllByLabelText('ยอดที่จ่าย (บาท)')).toHaveLength(1)
     expect(screen.getAllByLabelText('วันที่ชำระ')).toHaveLength(1)
     expect(screen.getByLabelText('ปิดยอดผ่อนทั้งหมด')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
-    fireEvent.click(screen.getByRole('button', { name: 'จ่ายแล้ว' }))
+    fireEvent.click(screen.getByRole('button', { name: /^จ่ายแล้ว งวด 2\/2/ }))
     expect(screen.getByRole('dialog', { name: 'งวด 2/2' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ยกเลิก' }))
     fireEvent.click(screen.getByRole('button', { name: '+ สร้างแผนผ่อน' }))
@@ -919,7 +923,7 @@ describe('finance pages', () => {
             closesPlan: false,
             dueDate: `2026-09-${String(11 - index).padStart(2, '0')}`,
             id: `occurrence-${index + 1}`,
-            installmentNumber: 1,
+            installmentNumber: index === 0 ? 10 : 1,
             paidAmountMinor: null,
             paidDate: null,
             status: 'cancelled',
@@ -928,7 +932,7 @@ describe('finance pages', () => {
         paymentMethod: 'bank_transfer',
         status: 'cancelled',
         totalAmountMinor: '10000',
-        totalInstallments: 1,
+        totalInstallments: index === 0 ? 10 : 1,
         updatedAt: '2026-09-03T00:00:00.000Z',
       })),
       transactions: [],
@@ -940,6 +944,8 @@ describe('finance pages', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ประวัติ 11' }))
     expect(screen.getByText('แผน 1')).toBeInTheDocument()
     expect(screen.getByText('แผน 10')).toBeInTheDocument()
+    expect(screen.getByText('10/10 · ยกเลิกแล้ว')).toBeInTheDocument()
+    expect(screen.getAllByText('1/1 · ยกเลิกแล้ว').length).toBeGreaterThan(0)
     expect(screen.queryByText('แผน 11')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ถัดไป' }))
     expect(screen.getByText('แผน 11')).toBeInTheDocument()
