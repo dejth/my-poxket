@@ -19,7 +19,13 @@ import {
   transactions,
   users,
 } from '../database/schema.js'
-import { getDashboardSummary, todayInBangkok } from './service.js'
+import {
+  createRecurringExpenseRule,
+  getDashboardSummary,
+  todayInBangkok,
+  stopRecurringExpenseRule,
+  updateRecurringExpenseRule,
+} from './service.js'
 import {
   initializeStarterCategories,
   starterCategories,
@@ -459,14 +465,14 @@ describeWithDatabase('finance API with MariaDB', () => {
       expect.objectContaining({
         amountMinor: '30000',
         officialDueDate: '2026-11-01',
-        plannedPaymentDate: '2026-10-31',
+        statementStartDate: '2026-09-18',
         purchaseCount: 1,
         statementEndDate: '2026-10-17',
       }),
       expect.objectContaining({
         amountMinor: '30000',
         officialDueDate: '2026-10-01',
-        plannedPaymentDate: '2026-09-30',
+        statementStartDate: '2026-08-18',
         purchaseCount: 2,
         statementEndDate: '2026-09-17',
       }),
@@ -638,7 +644,7 @@ describeWithDatabase('finance API with MariaDB', () => {
       expect.arrayContaining([
         expect.objectContaining({
           amountMinor: '30000',
-          dueDate: '2026-09-30',
+          dueDate: '2026-10-01',
           officialDueDate: '2026-10-01',
           source: 'credit_card_statement',
         }),
@@ -698,6 +704,7 @@ describeWithDatabase('finance API with MariaDB', () => {
       headers: { cookie, 'x-csrf-token': csrfToken },
       method: 'PATCH',
       payload: {
+        expectedAmountMinor: '30000',
         paidAmount: '310',
         paidDate: '2026-09-30',
         status: 'paid',
@@ -1171,6 +1178,450 @@ describeWithDatabase('finance API with MariaDB', () => {
         url: '/api/credit-cards',
       })
       expect(response.statusCode).toBe(400)
+    }
+  })
+
+  it('uses posting dates for statements and keeps purchase activity on its original day', async () => {
+    const category = await createCategory('expense', 'Posting examples')
+    const card = await createCreditCard({
+      name: 'Posting card',
+      cutoffDay: 17,
+      dueDay: 1,
+    })
+    await createTransaction(category.id, {
+      amount: '5',
+      description: 'Posted after cutoff',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      creditCardId: card.id,
+      transactionDate: '2026-09-16',
+      postingDate: '2026-09-18',
+    })
+    const items = await getStatements(card.id)
+    expect(items).toEqual([
+      expect.objectContaining({
+        amountMinor: '500',
+        statementStartDate: '2026-09-18',
+        statementEndDate: '2026-10-17',
+        officialDueDate: '2026-11-01',
+        items: [
+          expect.objectContaining({
+            transactionDate: '2026-09-16',
+            postingDate: '2026-09-18',
+          }),
+        ],
+      }),
+    ])
+    expect(
+      (await getDashboardSummary(database, '2026-09', '2026-10-31')).activity
+        .expenseMinor,
+    ).toBe('500')
+    for (const values of [
+      { paymentMethod: 'cash', postingDate: '2026-09-18' },
+      {
+        paymentMethod: 'credit_card',
+        creditCardId: card.id,
+        postingDate: '2026-09-15',
+      },
+    ]) {
+      const response = await createTransactionResponse(category.id, {
+        amount: '5',
+        description: 'Invalid posting',
+        direction: 'expense',
+        transactionDate: '2026-09-16',
+        ...values,
+      })
+      expect(response.statusCode).toBe(400)
+    }
+  })
+
+  it('pays recurring and installment card charges once through their statement and safely reopens it', async () => {
+    const category = await createCategory('expense', 'Consolidated examples')
+    const card = await createCreditCard({
+      name: 'Consolidated card',
+      cutoffDay: 17,
+      dueDay: 1,
+    })
+    const plan = await createInstallmentPlan({
+      categoryId: category.id,
+      creditCardId: card.id,
+      description: 'One installment',
+      firstPaymentDate: '2026-10-10',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '20',
+      paymentMethod: 'credit_card',
+      totalInstallments: 1,
+    })
+    const recurring = await createRecurringExpenseResponse({
+      categoryId: category.id,
+      creditCardId: card.id,
+      description: 'Monthly card',
+      startDate: '2026-10-10',
+      recurrenceDay: 10,
+      idempotencyKey: randomUUID(),
+      amount: '10',
+      paymentMethod: 'credit_card',
+    })
+    expect(recurring.statusCode).toBe(201)
+    const ruleId = recurring.json<{ id: string }>().id
+    await createTransaction(category.id, {
+      amount: '5',
+      description: 'One-time charge',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      creditCardId: card.id,
+      transactionDate: '2026-10-10',
+    })
+    const before = await getStatements(card.id)
+    expect(before).toEqual([
+      expect.objectContaining({
+        amountMinor: '3500',
+        purchaseCount: 3,
+        statementEndDate: '2026-10-17',
+      }),
+    ])
+    const direct = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: { paidAmount: '10', paidDate: '2026-10-31', status: 'paid' },
+      url: `/api/recurring-expenses/${ruleId}/occurrences/2026-10`,
+    })
+    expect(direct.statusCode).toBe(409)
+    const payment = () =>
+      app.inject({
+        headers: { cookie, 'x-csrf-token': csrfToken },
+        method: 'PATCH',
+        payload: {
+          expectedAmountMinor: '3500',
+          paidAmount: '34',
+          paidDate: '2026-10-31',
+          status: 'paid',
+        },
+        url: `/api/credit-card-statements/${card.id}/2026-10-17/payment`,
+      })
+    expect((await payment()).statusCode).toBe(200)
+    expect((await payment()).statusCode).toBe(200)
+    const changedPayment = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        expectedAmountMinor: '3500',
+        paidAmount: '34',
+        paidDate: '2026-10-30',
+        status: 'paid',
+      },
+      url: `/api/credit-card-statements/${card.id}/2026-10-17/payment`,
+    })
+    expect(changedPayment.statusCode).toBe(200)
+    const [linked] = await database
+      .select()
+      .from(installmentOccurrences)
+      .where(eq(installmentOccurrences.installmentPlanId, plan.id))
+    expect(linked).toEqual(
+      expect.objectContaining({
+        status: 'paid',
+        paidDate: '2026-10-30',
+        paidAmountMinor: 2000n,
+      }),
+    )
+
+    const paid = await getDashboardSummary(database, '2026-10', '2026-10-31')
+    expect(paid.activity.expenseMinor).toBe('3500')
+    expect(paid.cashFlow.outflowMinor).toBe('3400')
+    expect(paid.history.filter((item) => item.status === 'paid')).toHaveLength(
+      1,
+    )
+    expect((await getStatements(card.id))[0]).toEqual(
+      expect.objectContaining({
+        amountMinor: '3500',
+        status: 'paid',
+        purchaseCount: 3,
+      }),
+    )
+    const [planRow] = await database
+      .select()
+      .from(installmentPlans)
+      .where(eq(installmentPlans.id, plan.id))
+    expect(planRow?.status).toBe('completed')
+    const late = await createTransactionResponse(category.id, {
+      amount: '5',
+      description: 'Late edit',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      creditCardId: card.id,
+      transactionDate: '2026-10-10',
+    })
+    expect(late.statusCode).toBe(409)
+    const unpay = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: { status: 'unpaid' },
+      url: `/api/credit-card-statements/${card.id}/2026-10-17/payment`,
+    })
+    expect(unpay.statusCode).toBe(200)
+    expect(
+      (await getDashboardSummary(database, '2026-10', '2026-10-31')).cashFlow
+        .outflowMinor,
+    ).toBe('0')
+    const [reopened] = await database
+      .select()
+      .from(installmentPlans)
+      .where(eq(installmentPlans.id, plan.id))
+    expect(reopened?.status).toBe('active')
+  })
+
+  it('preserves legacy independently paid card occurrences when a later bill is paid and reopened', async () => {
+    const category = await createCategory('expense', 'Legacy examples')
+    const card = await createCreditCard({
+      name: 'Legacy card',
+      cutoffDay: 17,
+      dueDay: 1,
+    })
+    const plan = await createInstallmentPlan({
+      categoryId: category.id,
+      creditCardId: card.id,
+      description: 'Legacy payment',
+      firstPaymentDate: '2026-10-10',
+      idempotencyKey: randomUUID(),
+      installmentAmount: '20',
+      paymentMethod: 'credit_card',
+      totalInstallments: 1,
+    })
+    await database
+      .update(installmentOccurrences)
+      .set({ status: 'paid', paidAmountMinor: 1900n, paidDate: '2026-10-20' })
+      .where(eq(installmentOccurrences.installmentPlanId, plan.id))
+    await createTransaction(category.id, {
+      amount: '5',
+      description: 'Current charge',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      creditCardId: card.id,
+      transactionDate: '2026-10-10',
+    })
+    expect((await getStatements(card.id))[0]).toEqual(
+      expect.objectContaining({ amountMinor: '500' }),
+    )
+    const url = `/api/credit-card-statements/${card.id}/2026-10-17/payment`
+    expect(
+      (
+        await app.inject({
+          headers: { cookie, 'x-csrf-token': csrfToken },
+          method: 'PATCH',
+          payload: {
+            expectedAmountMinor: '500',
+            status: 'paid',
+            paidAmount: '5',
+            paidDate: '2026-10-31',
+          },
+          url,
+        })
+      ).statusCode,
+    ).toBe(200)
+    expect(
+      (await getDashboardSummary(database, '2026-10', '2026-10-31')).cashFlow
+        .outflowMinor,
+    ).toBe('2400')
+    const legacyUnpay = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: { status: 'unpaid' },
+      url: `/api/installment-plans/${plan.id}/occurrences/1`,
+    })
+    expect(legacyUnpay.statusCode).toBe(409)
+
+    expect(
+      (
+        await app.inject({
+          headers: { cookie, 'x-csrf-token': csrfToken },
+          method: 'PATCH',
+          payload: { status: 'unpaid' },
+          url,
+        })
+      ).statusCode,
+    ).toBe(200)
+    const [legacy] = await database
+      .select()
+      .from(installmentOccurrences)
+      .where(eq(installmentOccurrences.installmentPlanId, plan.id))
+    expect(legacy).toEqual(
+      expect.objectContaining({
+        status: 'paid',
+        paidAmountMinor: 1900n,
+        paidDate: '2026-10-20',
+        statementPaymentId: null,
+      }),
+    )
+  })
+
+  it('rejects moving or generating recurring charges into a paid bill without partial changes', async () => {
+    const category = await createCategory('expense', 'Protected bill examples')
+    const card = await createCreditCard({
+      name: 'Protected card',
+      cutoffDay: 17,
+      dueDay: 1,
+    })
+    const base = {
+      categoryId: category.id,
+      creditCardId: card.id,
+      description: 'Future card charge',
+      startDate: '2026-10-01',
+      recurrenceDay: 20,
+      idempotencyKey: randomUUID(),
+      amount: '10',
+      paymentMethod: 'credit_card' as const,
+    }
+    const rule = await createRecurringExpenseRule(
+      database,
+      userId,
+      base,
+      '2026-10-31',
+    )
+    await createTransaction(category.id, {
+      amount: '5',
+      description: 'Closed charge',
+      direction: 'expense',
+      paymentMethod: 'credit_card',
+      creditCardId: card.id,
+      transactionDate: '2026-10-10',
+    })
+    const paid = await app.inject({
+      headers: { cookie, 'x-csrf-token': csrfToken },
+      method: 'PATCH',
+      payload: {
+        expectedAmountMinor: '500',
+        status: 'paid',
+        paidAmount: '5',
+        paidDate: '2026-10-31',
+      },
+      url: `/api/credit-card-statements/${card.id}/2026-10-17/payment`,
+    })
+    expect(paid.statusCode).toBe(200)
+    await expect(
+      updateRecurringExpenseRule(
+        database,
+        rule.id,
+        { ...base, recurrenceDay: 10 },
+        '2026-10-31',
+      ),
+    ).rejects.toMatchObject({ code: 'CARD_STATEMENT_ALREADY_PAID' })
+    const [unchanged] = await database
+      .select()
+      .from(recurringExpenseRules)
+      .where(eq(recurringExpenseRules.id, rule.id))
+    expect(unchanged?.recurrenceDay).toBe(20)
+    const before = await database.select().from(recurringExpenseRules)
+    await expect(
+      createRecurringExpenseRule(
+        database,
+        userId,
+        { ...base, idempotencyKey: randomUUID(), recurrenceDay: 10 },
+        '2026-10-31',
+      ),
+    ).rejects.toMatchObject({ code: 'CARD_STATEMENT_ALREADY_PAID' })
+    expect(await database.select().from(recurringExpenseRules)).toEqual(before)
+    expect((await getStatements(card.id))[0]).toEqual(
+      expect.objectContaining({ amountMinor: '500', status: 'paid' }),
+    )
+  })
+
+  it('serializes bill payments with cancelling card installments and stopping recurring charges', async () => {
+    const category = await createCategory('expense', 'Concurrent examples')
+    for (const source of ['installment', 'recurring'] as const) {
+      const card = await createCreditCard({
+        name: `Concurrent ${source}`,
+        cutoffDay: 17,
+        dueDay: 1,
+      })
+      await createTransaction(category.id, {
+        amount: '5',
+        description: 'Stable charge',
+        direction: 'expense',
+        paymentMethod: 'credit_card',
+        creditCardId: card.id,
+        transactionDate: '2026-10-10',
+      })
+      let cancel: () => Promise<unknown>
+      if (source === 'installment') {
+        const plan = await createInstallmentPlan({
+          categoryId: category.id,
+          creditCardId: card.id,
+          description: 'Concurrent installment',
+          firstPaymentDate: '2026-10-10',
+          idempotencyKey: randomUUID(),
+          installmentAmount: '20',
+          paymentMethod: 'credit_card',
+          totalInstallments: 1,
+        })
+        cancel = () =>
+          app.inject({
+            headers: { cookie, 'x-csrf-token': csrfToken },
+            method: 'POST',
+            url: `/api/installment-plans/${plan.id}/cancel`,
+          })
+      } else {
+        const rule = await createRecurringExpenseRule(
+          database,
+          userId,
+          {
+            categoryId: category.id,
+            creditCardId: card.id,
+            description: 'Concurrent recurring',
+            startDate: '2026-10-01',
+            recurrenceDay: 10,
+            idempotencyKey: randomUUID(),
+            amount: '20',
+            paymentMethod: 'credit_card',
+          },
+          '2026-10-01',
+        )
+        cancel = () =>
+          stopRecurringExpenseRule(database, rule.id, 'cancel', '2026-10-01')
+      }
+      const paymentUrl = `/api/credit-card-statements/${card.id}/2026-10-17/payment`
+      const [cancelled, payment] = await Promise.all([
+        cancel(),
+        app.inject({
+          headers: { cookie, 'x-csrf-token': csrfToken },
+          method: 'PATCH',
+          payload: {
+            status: 'paid',
+            paidAmount: '25',
+            expectedAmountMinor: '2500',
+            paidDate: '2026-10-31',
+          },
+          url: paymentUrl,
+        }),
+      ])
+      if (
+        cancelled &&
+        typeof cancelled === 'object' &&
+        'statusCode' in cancelled
+      )
+        expect([200, 409]).toContain(cancelled.statusCode)
+      expect([200, 409]).toContain(payment.statusCode)
+      const [statement] = (await getStatements(card.id)) as {
+        amountMinor: string
+        status: string
+        paidAmountMinor: string | null
+      }[]
+      if (payment.statusCode === 200) {
+        expect(statement).toEqual(
+          expect.objectContaining({
+            amountMinor: '2500',
+            status: 'paid',
+            paidAmountMinor: '2500',
+          }),
+        )
+      } else {
+        expect(statement).toEqual(
+          expect.objectContaining({
+            amountMinor: '500',
+            status: 'unpaid',
+            paidAmountMinor: null,
+          }),
+        )
+      }
     }
   })
 

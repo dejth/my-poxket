@@ -5,6 +5,11 @@ import type { SessionData } from './api'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
 import { Modal } from './Modal'
+import {
+  readThemePreference,
+  setThemePreference,
+  type ThemePreference,
+} from './theme'
 
 interface AppShellProps {
   readonly isSigningOut: boolean
@@ -23,6 +28,11 @@ const navigation = [
 
 export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
   const [isMoreOpen, setMoreOpen] = useState(false)
+  const [theme, setTheme] = useState(readThemePreference)
+  function changeTheme(preference: ThemePreference) {
+    setThemePreference(preference)
+    setTheme(preference)
+  }
   const { pathname } = useLocation()
   const secondaryNavigation = [
     ...navigation.slice(3),
@@ -62,6 +72,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
           ))}
         </nav>
         <section className="sidebar-account" aria-label="บัญชี">
+          <ThemeToggle preference={theme} onChange={changeTheme} />
           {session.user.role === 'owner' ? (
             <NavLink className="nav-link" to="/users">
               <Icon name="people" />
@@ -85,6 +96,7 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
           <NavLink className="app-brand" to="/" aria-label="My Poxket">
             <Logo />
           </NavLink>
+          <ThemeToggle preference={theme} onChange={changeTheme} />
         </header>
         <div id="main-content" tabIndex={-1}>
           <Outlet context={{ session }} />
@@ -178,5 +190,33 @@ export function AppShell({ isSigningOut, onSignOut, session }: AppShellProps) {
         </Modal>
       ) : null}
     </div>
+  )
+}
+
+function ThemeToggle({
+  preference,
+  onChange,
+}: {
+  readonly preference: ThemePreference
+  readonly onChange: (preference: ThemePreference) => void
+}) {
+  const next: ThemePreference =
+    preference === 'system'
+      ? 'light'
+      : preference === 'light'
+        ? 'dark'
+        : 'system'
+  const labels = { system: 'ตามระบบ', light: 'สว่าง', dark: 'มืด' }
+  const icons = { system: 'display', light: 'sun', dark: 'moon-stars' } as const
+  return (
+    <button
+      className="theme-toggle icon-button"
+      type="button"
+      aria-label={`ธีม: ${labels[preference]} — เปลี่ยนเป็น${labels[next]}`}
+      title={`ธีม: ${labels[preference]} · กดเพื่อเปลี่ยนเป็น${labels[next]}`}
+      onClick={() => onChange(next)}
+    >
+      <Icon name={icons[preference]} />
+    </button>
   )
 }

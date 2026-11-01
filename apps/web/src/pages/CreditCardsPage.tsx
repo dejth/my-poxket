@@ -1,3 +1,4 @@
+import { StatementDialog } from './StatementDialog'
 import { QueryError } from '../app/QueryError'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -41,6 +42,8 @@ interface StatementFilters {
 export function CreditCardsPage() {
   const { session } = useAuthenticatedContext()
   const queryClient = useQueryClient()
+  const [selectedStatement, setSelectedStatement] =
+    useState<CreditCardStatementData | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [isFormOpen, setFormOpen] = useState(false)
   const [filters, setFilters] = useState(currentYearRange)
@@ -50,7 +53,7 @@ export function CreditCardsPage() {
     queryKey: ['credit-cards'],
   })
   const statementsQuery = useQuery({
-    queryFn: () => getCreditCardStatements(filters),
+    queryFn: () => getCreditCardStatements(session.csrfToken, filters),
     queryKey: ['credit-card-statements', filters],
   })
   const form = useForm<CreditCardFormValues>({
@@ -90,7 +93,7 @@ export function CreditCardsPage() {
         <div>
           <p className="eyebrow">รอบบัตรและยอดชำระ</p>
           <h1>บัตรเครดิต</h1>
-          <p>แยกวันครบกำหนดของผู้ให้บริการออกจากวันที่วางแผนชำระ</p>
+          <p>ดูรายการในรอบบิล และบันทึกวันที่จ่ายจริง</p>
         </div>
         <button
           className="primary-button action-button"
@@ -408,18 +411,30 @@ export function CreditCardsPage() {
               <p>ยอดจะปรากฏเมื่อมีรายการชำระด้วยบัตรเครดิต</p>
             </div>
           ) : (
-            <StatementLists statements={statements} />
+            <StatementLists
+              statements={statements}
+              onOpen={setSelectedStatement}
+            />
           )}
         </section>
       </section>
+      {selectedStatement ? (
+        <StatementDialog
+          statement={selectedStatement}
+          onClose={() => setSelectedStatement(null)}
+          onSaved={() => setNotice('บันทึกสถานะบิลแล้ว')}
+        />
+      ) : null}
     </main>
   )
 }
 
 function StatementLists({
   statements,
+  onOpen,
 }: {
   readonly statements: readonly CreditCardStatementData[]
+  readonly onOpen: (statement: CreditCardStatementData) => void
 }) {
   return (
     <>
@@ -429,27 +444,44 @@ function StatementLists({
           <thead>
             <tr>
               <th>บัตร</th>
-              <th>วันสรุปยอด</th>
+              <th>รอบรายการ</th>
               <th>กำหนดชำระตามบัตร</th>
-              <th>วันที่วางแผนชำระ</th>
+              <th>จ่ายจริง</th>
               <th>รายการ</th>
               <th>สถานะ</th>
               <th className="amount-cell">ยอดรวม</th>
+              <th>จัดการบิล</th>
             </tr>
           </thead>
           <tbody>
             {statements.map((statement) => (
               <tr key={`${statement.cardId}:${statement.statementEndDate}`}>
                 <td>{formatCardName(statement)}</td>
-                <td>{formatThaiDate(statement.statementEndDate)}</td>
+                <td>
+                  {formatThaiDate(statement.statementStartDate)} –{' '}
+                  {formatThaiDate(statement.statementEndDate)}
+                </td>
                 <td>{formatThaiDate(statement.officialDueDate)}</td>
-                <td>{formatThaiDate(statement.plannedPaymentDate)}</td>
+                <td>
+                  {statement.paidDate
+                    ? formatThaiDate(statement.paidDate)
+                    : '—'}
+                </td>
                 <td>{statement.purchaseCount}</td>
                 <td>
                   <StatementStatus status={statement.status} />
                 </td>
                 <td className="amount-cell expense">
                   {formatThbMinor(statement.amountMinor)}
+                </td>
+                <td>
+                  <button
+                    className="small-button"
+                    type="button"
+                    onClick={() => onOpen(statement)}
+                  >
+                    ดูบิล / บันทึกจ่าย
+                  </button>
                 </td>
               </tr>
             ))}
@@ -471,22 +503,36 @@ function StatementLists({
             <StatementStatus status={statement.status} />
             <dl className="statement-dates">
               <div>
-                <dt>วันสรุปยอด</dt>
-                <dd>{formatThaiDate(statement.statementEndDate)}</dd>
+                <dt>รอบรายการ</dt>
+                <dd>
+                  {formatThaiDate(statement.statementStartDate)} –{' '}
+                  {formatThaiDate(statement.statementEndDate)}
+                </dd>
               </div>
               <div>
                 <dt>กำหนดชำระตามบัตร</dt>
                 <dd>{formatThaiDate(statement.officialDueDate)}</dd>
               </div>
               <div>
-                <dt>วันที่วางแผนชำระ</dt>
-                <dd>{formatThaiDate(statement.plannedPaymentDate)}</dd>
+                <dt>จ่ายจริง</dt>
+                <dd>
+                  {statement.paidDate
+                    ? formatThaiDate(statement.paidDate)
+                    : '—'}
+                </dd>
               </div>
               <div>
                 <dt>จำนวนรายการ</dt>
                 <dd>{statement.purchaseCount}</dd>
               </div>
             </dl>
+            <button
+              className="small-button"
+              type="button"
+              onClick={() => onOpen(statement)}
+            >
+              ดูบิล / บันทึกจ่าย
+            </button>
           </article>
         ))}
       </div>

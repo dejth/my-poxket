@@ -6,7 +6,10 @@ import '@fontsource-variable/anuphan/wght.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 
 import { router } from './app/router'
+import { initializeTheme } from './app/theme'
 import './styles/global.css'
+
+initializeTheme()
 
 const queryClient = new QueryClient({
   defaultOptions: {

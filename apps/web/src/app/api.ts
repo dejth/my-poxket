@@ -71,10 +71,21 @@ export interface CreditCardStatementData {
   readonly officialDueDate: string
   readonly paidAmountMinor: string | null
   readonly paidDate: string | null
-  readonly plannedPaymentDate: string
+  readonly statementStartDate: string
+  readonly items: readonly StatementItemData[]
   readonly purchaseCount: number
   readonly statementEndDate: string
   readonly status: 'paid' | 'unpaid'
+}
+
+export interface StatementItemData {
+  readonly id: string
+  readonly description: string
+  readonly amountMinor: string
+  readonly transactionDate: string
+  readonly postingDate: string | null
+  readonly source: 'transaction' | 'recurring' | 'installment'
+  readonly context: string
 }
 
 export interface CreditCardStatementPaymentData {
@@ -145,6 +156,8 @@ export type InstallmentPlanStatus =
 export type InstallmentOccurrenceStatus = 'unpaid' | 'paid' | 'cancelled'
 
 export interface InstallmentOccurrenceData {
+  readonly statementPaymentId?: string | null
+
   readonly amountMinor: string
   readonly closesPlan: boolean
   readonly dueDate: string
@@ -190,6 +203,8 @@ export type RecurringRuleStatus = 'active' | 'stopped'
 export type RecurringOccurrenceStatus = 'unpaid' | 'paid' | 'cancelled'
 
 export interface RecurringOccurrenceData {
+  readonly statementPaymentId?: string | null
+
   readonly amountMinor: string
   readonly categoryId: string
   readonly categoryName: string
@@ -250,6 +265,7 @@ export interface TransactionData {
   readonly id: string
   readonly paymentMethod: PaymentMethod
   readonly status: TransactionStatus
+  readonly postingDate?: string | null | undefined
   readonly transactionDate: string
   readonly updatedAt: string
 }
@@ -261,6 +277,7 @@ export interface TransactionInput {
   readonly description: string
   readonly direction: Direction
   readonly paymentMethod: PaymentMethod
+  readonly postingDate?: string | null | undefined
   readonly transactionDate: string
 }
 
@@ -371,11 +388,20 @@ export function setCreditCardStatus(
   )
 }
 
-export async function getCreditCardStatements(filters: {
-  readonly cardId?: string | undefined
-  readonly dateFrom: string
-  readonly dateTo: string
-}): Promise<readonly CreditCardStatementData[]> {
+export async function getCreditCardStatements(
+  csrfToken: string,
+  filters: {
+    readonly cardId?: string | undefined
+    readonly dateFrom: string
+    readonly dateTo: string
+  },
+): Promise<readonly CreditCardStatementData[]> {
+  await mutateJson(
+    '/api/recurring-expenses/materialize',
+    csrfToken,
+    undefined,
+    'POST',
+  )
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(filters)) {
     if (value) params.set(key, value)
@@ -412,6 +438,7 @@ export function setCreditCardStatementPayment(
   statementEndDate: string,
   input:
     | {
+        readonly expectedAmountMinor: string
         readonly paidAmount: string
         readonly paidDate: string
         readonly status: 'paid'

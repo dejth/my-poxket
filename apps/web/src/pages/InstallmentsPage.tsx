@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { QueryError } from '../app/QueryError'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { calculateInstallmentEndDate } from '@my-poxket/domain/calendar'
@@ -157,7 +158,15 @@ export function InstallmentsPage() {
       setIsCreateOpen(false)
       setPlanPage(1)
       setPlanView('active')
-      await queryClient.invalidateQueries({ queryKey: ['installment-plans'] })
+      await Promise.all(
+        [
+          'installment-plans',
+          'credit-card-statements',
+          'dashboard-summary',
+        ].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey: [queryKey] }),
+        ),
+      )
     },
   })
   const statusMutation = useMutation({
@@ -200,7 +209,15 @@ export function InstallmentsPage() {
             ? 'บันทึกการชำระแล้ว'
             : 'เปลี่ยนเป็นยังไม่จ่ายแล้ว',
       )
-      await queryClient.invalidateQueries({ queryKey: ['installment-plans'] })
+      await Promise.all(
+        [
+          'installment-plans',
+          'credit-card-statements',
+          'dashboard-summary',
+        ].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey: [queryKey] }),
+        ),
+      )
     },
   })
   const cancelMutation = useMutation({
@@ -209,7 +226,15 @@ export function InstallmentsPage() {
     onSuccess: async () => {
       setPlanPage(1)
       setNotice('ยกเลิกงวดที่ยังไม่จ่ายแล้ว ประวัติที่จ่ายแล้วยังคงอยู่')
-      await queryClient.invalidateQueries({ queryKey: ['installment-plans'] })
+      await Promise.all(
+        [
+          'installment-plans',
+          'credit-card-statements',
+          'dashboard-summary',
+        ].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey: [queryKey] }),
+        ),
+      )
     },
   })
 
@@ -669,6 +694,8 @@ function InstallmentPlanCard({
     plan.occurrences.find(({ status }) => status === 'unpaid') ??
     plan.occurrences.find(({ closesPlan }) => closesPlan) ??
     plan.occurrences.at(-1)
+  const firstTrackedNumber = plan.occurrences.at(0)?.installmentNumber ?? 1
+  const isPartialHistory = firstTrackedNumber > 1
   const paidCount = plan.occurrences.filter(
     ({ status }) => status === 'paid',
   ).length
@@ -688,6 +715,12 @@ function InstallmentPlanCard({
             {formatOptionalAmount(plan.totalAmountMinor, 'ยอดรวมไม่ระบุ')} ·{' '}
             {paymentLabels[plan.paymentMethod]}
           </p>
+          {isPartialHistory ? (
+            <p>
+              เริ่มติดตามงวด {firstTrackedNumber}/{plan.totalInstallments} ·
+              ไม่รวมประวัติก่อนหน้านี้
+            </p>
+          ) : null}
         </div>
         <span className={`status-label ${plan.status}`}>
           {planStatusLabels[plan.status]}
@@ -696,9 +729,9 @@ function InstallmentPlanCard({
 
       <div className="installment-summary">
         <div>
-          <span>ชำระแล้ว</span>
+          <span>{isPartialHistory ? 'ชำระแล้วที่บันทึก' : 'ชำระแล้ว'}</span>
           <strong>
-            {paidCount} จาก {plan.totalInstallments} งวด
+            {paidCount} จาก {plan.occurrences.length} งวด
           </strong>
         </div>
         <div>
@@ -708,7 +741,11 @@ function InstallmentPlanCard({
           </strong>
         </div>
         <div>
-          <span>ยอดจ่ายจริง</span>
+          <span>
+            {plan.paymentMethod === 'credit_card'
+              ? 'ยอดงวดที่จ่ายแล้ว'
+              : 'ยอดจ่ายจริง'}
+          </span>
           <strong>{formatThbMinor(paidAmountMinor.toString())}</strong>
         </div>
         <div>
@@ -730,22 +767,33 @@ function InstallmentPlanCard({
               ยอดตามแผน{' '}
               {formatOptionalAmount(current.amountMinor, 'ระบุยอดตอนจ่าย')}
             </span>
-            <small>ครบกำหนด {formatThaiDate(current.dueDate)}</small>
+            <small>
+              {plan.paymentMethod === 'credit_card'
+                ? 'วันที่รายการเข้าบัตร'
+                : 'ครบกำหนด'}{' '}
+              {formatThaiDate(current.dueDate)}
+            </small>
           </div>
-          <button
-            aria-label={`บันทึกว่าจ่ายแล้ว งวด ${current.installmentNumber}/${plan.totalInstallments} ของ ${plan.description}`}
-            className="primary-button"
-            disabled={isPending}
-            onClick={() => onPay(current)}
-            type="button"
-          >
-            บันทึกว่าจ่ายแล้ว
-          </button>
+          {plan.paymentMethod === 'credit_card' ? (
+            <Link className="primary-button" to="/credit-cards">
+              ดูบิลบัตรเครดิต
+            </Link>
+          ) : (
+            <button
+              aria-label={`บันทึกว่าจ่ายแล้ว งวด ${current.installmentNumber}/${plan.totalInstallments} ของ ${plan.description}`}
+              className="primary-button"
+              disabled={isPending}
+              onClick={() => onPay(current)}
+              type="button"
+            >
+              บันทึกว่าจ่ายแล้ว
+            </button>
+          )}
         </div>
       ) : null}
 
       <details className="installment-details">
-        <summary>ดูรายละเอียด {plan.totalInstallments} งวด</summary>
+        <summary>ดูรายละเอียด {plan.occurrences.length} งวด</summary>
         <ol className="installment-occurrences">
           {plan.occurrences.map((occurrence) => (
             <li key={occurrence.id}>
@@ -753,7 +801,12 @@ function InstallmentPlanCard({
                 <strong>
                   งวด {occurrence.installmentNumber}/{plan.totalInstallments}
                 </strong>
-                <span>ครบกำหนด {formatThaiDate(occurrence.dueDate)}</span>
+                <span>
+                  {plan.paymentMethod === 'credit_card'
+                    ? 'วันที่รายการเข้าบัตร'
+                    : 'ครบกำหนด'}{' '}
+                  {formatThaiDate(occurrence.dueDate)}
+                </span>
                 <span>
                   ยอดตามแผน{' '}
                   {formatOptionalAmount(
@@ -767,13 +820,24 @@ function InstallmentPlanCard({
                   </span>
                   {occurrence.status === 'paid' ? (
                     <small>
-                      ยอดจ่ายจริง {formatThbMinor(occurrence.paidAmountMinor!)}{' '}
-                      · {formatThaiDate(occurrence.paidDate!)}
+                      {occurrence.statementPaymentId
+                        ? 'ยอดในบิล'
+                        : 'ยอดจ่ายจริง'}{' '}
+                      {formatThbMinor(occurrence.paidAmountMinor!)} ·{' '}
+                      {formatThaiDate(occurrence.paidDate!)}
                     </small>
                   ) : null}
                 </div>
               </div>
-              {plan.status === 'active' && occurrence.status === 'unpaid' ? (
+              {plan.paymentMethod === 'credit_card' &&
+              (occurrence.status === 'unpaid' ||
+                occurrence.statementPaymentId) ? (
+                <Link className="small-button" to="/credit-cards">
+                  {occurrence.statementPaymentId
+                    ? 'จ่ายพร้อมบิลบัตร'
+                    : 'รวมในบิลบัตร'}
+                </Link>
+              ) : plan.status === 'active' && occurrence.status === 'unpaid' ? (
                 <button
                   aria-label={`จ่ายแล้ว งวด ${occurrence.installmentNumber}/${plan.totalInstallments} ของ ${plan.description}`}
                   className="small-button"

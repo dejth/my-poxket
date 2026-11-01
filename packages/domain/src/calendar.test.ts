@@ -4,7 +4,7 @@ import {
   addCalendarMonthsClamped,
   calculateCardDueDate,
   calculateInstallmentEndDate,
-  calculatePlannedCardPaymentDate,
+  calculateStatementStartDate,
   calculateStatementEndDate,
   daysInMonth,
   nextMonthPeriod,
@@ -49,17 +49,9 @@ describe('calendar rules', () => {
     expect(calculateCardDueDate('2026-01-31', 31)).toBe('2026-02-28')
   })
 
-  it('derives official and planned payment dates without preceding the statement', () => {
-    const dueDate = calculateCardDueDate('2026-09-17', 1)
-    expect(dueDate).toBe('2026-10-01')
-    expect(calculatePlannedCardPaymentDate('2026-09-17', dueDate)).toBe(
-      '2026-09-30',
-    )
-
-    const sameMonthDueDate = calculateCardDueDate('2026-09-05', 25)
-    expect(sameMonthDueDate).toBe('2026-09-25')
-    expect(
-      calculatePlannedCardPaymentDate('2026-09-05', sameMonthDueDate),
-    ).toBe('2026-09-25')
+  it('derives official due date and the inclusive statement interval', () => {
+    expect(calculateCardDueDate('2026-10-17', 1)).toBe('2026-11-01')
+    expect(calculateStatementStartDate('2026-10-17', 17)).toBe('2026-09-18')
+    expect(calculateStatementStartDate('2026-03-31', 31)).toBe('2026-03-01')
   })
 })

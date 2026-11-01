@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { QueryError } from '../app/QueryError'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -123,7 +124,15 @@ export function RecurringExpensesPage() {
       setNotice(
         wasEditing ? 'แก้ไขงวดปัจจุบันและอนาคตแล้ว' : 'สร้างรายการประจำแล้ว',
       )
-      await queryClient.invalidateQueries({ queryKey: ['recurring-expenses'] })
+      await Promise.all(
+        [
+          'recurring-expenses',
+          'credit-card-statements',
+          'dashboard-summary',
+        ].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey: [queryKey] }),
+        ),
+      )
     },
   })
   const paymentMutation = useMutation({
@@ -153,7 +162,15 @@ export function RecurringExpensesPage() {
       setNotice(
         status === 'paid' ? 'บันทึกการชำระแล้ว' : 'เปลี่ยนเป็นยังไม่จ่ายแล้ว',
       )
-      await queryClient.invalidateQueries({ queryKey: ['recurring-expenses'] })
+      await Promise.all(
+        [
+          'recurring-expenses',
+          'credit-card-statements',
+          'dashboard-summary',
+        ].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey: [queryKey] }),
+        ),
+      )
     },
   })
   const stopMutation = useMutation({
@@ -171,7 +188,15 @@ export function RecurringExpensesPage() {
           ? 'หยุดกฎและยกเลิกรายการอนาคตที่ยังไม่จ่ายแล้ว'
           : 'หยุดกฎแล้ว และคงรายการที่สร้างไว้',
       )
-      await queryClient.invalidateQueries({ queryKey: ['recurring-expenses'] })
+      await Promise.all(
+        [
+          'recurring-expenses',
+          'credit-card-statements',
+          'dashboard-summary',
+        ].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey: [queryKey] }),
+        ),
+      )
     },
   })
 
@@ -526,20 +551,31 @@ function RecurringCard({
       {rule.status === 'active' && current ? (
         <div className="current-installment-action">
           <div>
-            <span>รายการเดือนปัจจุบัน</span>
+            <span>งวดที่ต้องจัดการ</span>
             <strong>{formatThbMinor(current.amountMinor)}</strong>
-            <small>ครบกำหนด {formatThaiDate(current.dueDate)}</small>
+            <small>
+              {current.paymentMethod === 'credit_card'
+                ? 'วันที่รายการเข้าบัตร'
+                : 'ครบกำหนด'}{' '}
+              {formatThaiDate(current.dueDate)}
+            </small>
             <span className="status-label unpaid">ยังไม่จ่าย</span>
           </div>
-          <button
-            aria-label={`บันทึกว่าจ่ายแล้ว ${rule.description} ครบกำหนด ${formatThaiDate(current.dueDate)}`}
-            className="primary-button"
-            disabled={isPending}
-            onClick={() => onPay(current)}
-            type="button"
-          >
-            บันทึกว่าจ่ายแล้ว
-          </button>
+          {current.paymentMethod === 'credit_card' ? (
+            <Link className="primary-button" to="/credit-cards">
+              ดูบิลบัตรเครดิต
+            </Link>
+          ) : (
+            <button
+              aria-label={`บันทึกว่าจ่ายแล้ว ${rule.description} ครบกำหนด ${formatThaiDate(current.dueDate)}`}
+              className="primary-button"
+              disabled={isPending}
+              onClick={() => onPay(current)}
+              type="button"
+            >
+              บันทึกว่าจ่ายแล้ว
+            </button>
+          )}
         </div>
       ) : null}
       <details className="installment-details">
@@ -550,7 +586,12 @@ function RecurringCard({
           {rule.occurrences.map((occurrence) => (
             <li key={occurrence.id}>
               <div>
-                <strong>ครบกำหนด {formatThaiDate(occurrence.dueDate)}</strong>
+                <strong>
+                  {occurrence.paymentMethod === 'credit_card'
+                    ? 'วันที่รายการเข้าบัตร'
+                    : 'ครบกำหนด'}{' '}
+                  {formatThaiDate(occurrence.dueDate)}
+                </strong>
                 <span>
                   {formatThbMinor(occurrence.amountMinor)} ·{' '}
                   {occurrence.categoryName}
@@ -561,13 +602,22 @@ function RecurringCard({
                   </span>
                   {occurrence.status === 'paid' ? (
                     <small>
-                      จ่าย {formatThbMinor(occurrence.paidAmountMinor!)} เมื่อ{' '}
+                      {occurrence.statementPaymentId ? 'ยอดในบิล' : 'จ่าย'}{' '}
+                      {formatThbMinor(occurrence.paidAmountMinor!)} เมื่อ{' '}
                       {formatThaiDate(occurrence.paidDate!)}
                     </small>
                   ) : null}
                 </div>
               </div>
-              {occurrence.status === 'unpaid' ? (
+              {occurrence.paymentMethod === 'credit_card' &&
+              (occurrence.status === 'unpaid' ||
+                occurrence.statementPaymentId) ? (
+                <Link className="small-button" to="/credit-cards">
+                  {occurrence.statementPaymentId
+                    ? 'จ่ายพร้อมบิลบัตร'
+                    : 'รวมในบิลบัตร'}
+                </Link>
+              ) : occurrence.status === 'unpaid' ? (
                 <button
                   aria-label={`จ่ายแล้ว ${rule.description} ครบกำหนด ${formatThaiDate(occurrence.dueDate)}`}
                   className="small-button"
