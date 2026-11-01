@@ -112,16 +112,16 @@ export function calculateCardDueDate(
     : dateForMonthDay(year, month + 1, dueDay)
 }
 
-export function calculatePlannedCardPaymentDate(
+export function calculateStatementStartDate(
   statementEndDate: string,
-  officialDueDate: string,
+  cutoffDay: number,
 ): LocalDate {
-  parseLocalDate(statementEndDate)
-  const { year, month } = parseLocalDate(officialDueDate)
-  const priorMonthEnd = dateForMonthDay(year, month - 1, 31)
-  return priorMonthEnd >= statementEndDate
-    ? priorMonthEnd
-    : (officialDueDate as LocalDate)
+  const { year, month } = parseLocalDate(statementEndDate)
+  validateCardDay(cutoffDay)
+  const previousEnd = dateForMonthDay(year, month - 1, cutoffDay)
+  const start = new Date(`${previousEnd}T00:00:00Z`)
+  start.setUTCDate(start.getUTCDate() + 1)
+  return start.toISOString().slice(0, 10) as LocalDate
 }
 
 function validateCardDay(day: number): void {

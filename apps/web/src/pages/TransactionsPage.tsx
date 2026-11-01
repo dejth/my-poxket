@@ -47,6 +47,7 @@ const transactionSchema = z
       'other',
       'credit_card',
     ]),
+    postingDate: z.string().optional(),
     transactionDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'กรุณาเลือกวันที่'),
@@ -557,6 +558,7 @@ function TransactionFormDialog({
             description: '',
             direction: 'expense',
             paymentMethod: 'cash',
+            postingDate: '',
             transactionDate: todayInBangkok(),
           }
         : {
@@ -566,6 +568,7 @@ function TransactionFormDialog({
             description: target.description,
             direction: target.direction,
             paymentMethod: target.paymentMethod,
+            postingDate: target.postingDate ?? '',
             transactionDate: target.transactionDate,
           },
     [target],
@@ -575,6 +578,10 @@ function TransactionFormDialog({
     resolver: zodResolver(transactionSchema),
   })
   const direction = useWatch({ control: form.control, name: 'direction' })
+  const transactionDate = useWatch({
+    control: form.control,
+    name: 'transactionDate',
+  })
   const paymentMethod = useWatch({
     control: form.control,
     name: 'paymentMethod',
@@ -594,6 +601,10 @@ function TransactionFormDialog({
       const normalizedInput = {
         ...input,
         creditCardId: input.creditCardId || null,
+        postingDate:
+          input.paymentMethod === 'credit_card'
+            ? input.postingDate || null
+            : null,
       }
       return target === 'new'
         ? createTransaction(sessionCsrfToken, normalizedInput)
@@ -701,6 +712,23 @@ function TransactionFormDialog({
               </small>
             ) : null}
           </label>
+          {paymentMethod === 'credit_card' ? (
+            <details>
+              <summary>วันที่ธนาคารบันทึก (ถ้ามีในบิล)</summary>
+              <label className="field">
+                วันที่ธนาคารบันทึก
+                <input
+                  type="date"
+                  min={transactionDate}
+                  {...form.register('postingDate')}
+                />
+                <small>
+                  ใช้จัดรอบบิลเมื่อวันบันทึกต่างจากวันซื้อ
+                  เว้นว่างเพื่อใช้วันที่รายการ
+                </small>
+              </label>
+            </details>
+          ) : null}
           <label className="field">
             รายละเอียด
             <input

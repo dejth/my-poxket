@@ -139,6 +139,7 @@ export const transactions = mysqlTable(
     }).notNull(),
     currency: char('currency', { length: 3 }).notNull().default('THB'),
     transactionDate: date('transaction_date', { mode: 'string' }).notNull(),
+    postingDate: date('posting_date', { mode: 'string' }),
     description: varchar('description', { length: 255 }).notNull(),
     categoryId: char('category_id', { length: 36 })
       .notNull()
@@ -329,6 +330,7 @@ export const installmentOccurrences = mysqlTable(
   'installment_occurrences',
   {
     id: char('id', { length: 36 }).notNull(),
+    statementPaymentId: char('statement_payment_id', { length: 36 }),
     installmentPlanId: char('installment_plan_id', { length: 36 }).notNull(),
     installmentNumber: smallint('installment_number', {
       unsigned: true,
@@ -356,6 +358,11 @@ export const installmentOccurrences = mysqlTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    foreignKey({
+      name: 'installment_bill_payment_fk',
+      columns: [table.statementPaymentId],
+      foreignColumns: [creditCardStatementPayments.id],
+    }).onDelete('restrict'),
     primaryKey({ columns: [table.id] }),
     foreignKey({
       columns: [table.installmentPlanId],
@@ -463,6 +470,7 @@ export const recurringExpenseOccurrences = mysqlTable(
   'recurring_expense_occurrences',
   {
     id: char('id', { length: 36 }).notNull(),
+    statementPaymentId: char('statement_payment_id', { length: 36 }),
     recurringExpenseRuleId: char('recurring_expense_rule_id', {
       length: 36,
     }).notNull(),
@@ -505,6 +513,11 @@ export const recurringExpenseOccurrences = mysqlTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    foreignKey({
+      name: 'recurring_bill_payment_fk',
+      columns: [table.statementPaymentId],
+      foreignColumns: [creditCardStatementPayments.id],
+    }).onDelete('restrict'),
     primaryKey({ columns: [table.id] }),
     foreignKey({
       columns: [table.recurringExpenseRuleId],

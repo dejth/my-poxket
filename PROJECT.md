@@ -128,18 +128,22 @@ The official statement due date is derived from those monthly rules. A
 transaction on the cut-off date belongs to the statement ending that day; a
 later transaction belongs to the next statement.
 
-The owner normally plans to pay card statements at the end of the month before
-the official due month, such as September 30 for an October 1 or October 5 due
-date. This must be represented separately from the provider's official due
-date. If that planned date would precede the statement end, the official due
-date is used instead.
+Statements show their period, official due date, and actual payment date.
+There is no automatically planned payment date. The owner may pay before the
+provider's deadline and records the actual date and amount.
 
-Statements are derived from active linked purchases rather than persisted as
-snapshots. Card date rules are immutable in this phase: deactivate the old
-configuration and create a uniquely named replacement when rules change.
-Issue #6 stores only statement payment state, the actual amount paid, and the
-local payment date. Monthly activity still includes the card purchase, while
-cash flow includes the later statement payment instead of counting both.
+An optional bank posting date assigns a manual card purchase to its statement;
+without it, the purchase date is used. Monthly activity still uses the purchase
+date. Card recurring/installment occurrences appear in their statement without
+requiring duplicate transaction entry and are paid through that bill once.
+Legacy independently paid occurrences preserve their original history.
+
+Card date rules remain immutable: deactivate the old configuration and create a
+uniquely named replacement when rules change. Statement payments count once in
+cash flow on the actual payment date. The dashboard clearly labels current
+outstanding obligations separately from the selected month's activity/history.
+See [ADR 0010](docs/architecture/decisions/0010-card-bill-workflow.md) and
+[manual UAT](docs/uat/card-bills.md).
 
 ## Repository structure
 

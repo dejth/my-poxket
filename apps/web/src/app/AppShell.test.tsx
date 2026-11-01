@@ -6,9 +6,14 @@ import {
   within,
 } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppShell } from './AppShell'
+
+afterEach(() => {
+  localStorage.clear()
+  delete document.documentElement.dataset.theme
+})
 
 function setup(
   path = '/',
@@ -122,6 +127,32 @@ describe('mobile navigation', () => {
 })
 
 describe('desktop shell', () => {
+  it('cycles a single icon control through system, light and dark across both layouts', () => {
+    setup()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    const buttons = screen.getAllByRole('button', {
+      name: 'ธีม: ตามระบบ — เปลี่ยนเป็นสว่าง',
+    })
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0]?.querySelector('.bi-display')).not.toBeNull()
+    fireEvent.click(buttons[0]!)
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+    expect(
+      screen.getAllByRole('button', { name: 'ธีม: สว่าง — เปลี่ยนเป็นมืด' }),
+    ).toHaveLength(2)
+    fireEvent.click(buttons[1]!)
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(localStorage.getItem('my-poxket-theme')).toBe('dark')
+    expect(buttons[0]?.querySelector('.bi-moon-stars')).not.toBeNull()
+    fireEvent.click(buttons[0]!)
+    expect(document.documentElement).toHaveAttribute('data-theme', 'system')
+    expect(
+      screen.getAllByRole('button', {
+        name: 'ธีม: ตามระบบ — เปลี่ยนเป็นสว่าง',
+      }),
+    ).toHaveLength(2)
+  })
+
   it('scrolls to the top when navigation changes the route', async () => {
     const scrollToMock = vi.fn()
     window.scrollTo = scrollToMock

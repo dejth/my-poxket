@@ -59,6 +59,52 @@ describe('Calm Ledger tokens', () => {
   })
 })
 
+describe('dark palette and system appearance', () => {
+  it('keeps dark text, statuses and controls readable', () => {
+    const dark = css.match(/:root\[data-theme='dark'\]\s*\{([^}]+)\}/)?.[1]
+    expect(dark).toBeDefined()
+    const value = (name: string) => {
+      const token = dark?.match(
+        new RegExp(`--color-${name}: (#[a-f\\d]{6});`, 'i'),
+      )?.[1]
+      if (!token) throw Error(`Missing dark token ${name}`)
+      return luminance(token)
+    }
+    for (const [foreground, background] of [
+      ['ink', 'surface'],
+      ['muted', 'canvas'],
+      ['muted', 'surface'],
+      ['on-accent', 'accent'],
+      ['on-accent', 'accent-strong'],
+      ['accent', 'accent-soft'],
+      ['warning', 'warning-soft'],
+      ['error', 'error-soft'],
+    ]) {
+      const levels = [value(foreground!), value(background!)].sort(
+        (a, b) => a - b,
+      )
+      expect(
+        (levels[1]! + 0.05) / (levels[0]! + 0.05),
+        `${foreground}/${background}`,
+      ).toBeGreaterThanOrEqual(4.5)
+    }
+    const controls = [value('control-border'), value('surface')].sort(
+      (a, b) => a - b,
+    )
+    expect(
+      (controls[1]! + 0.05) / (controls[0]! + 0.05),
+    ).toBeGreaterThanOrEqual(3)
+  })
+  it('follows live system appearance unless light is explicitly selected', () => {
+    expect(css).toMatch(
+      /@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme='light'\]\)/,
+    )
+    expect(css).toMatch(/:root\[data-theme='dark'\]\s*\{\s*color-scheme: dark/)
+    expect(css).toContain('background: var(--color-surface)')
+    expect(css).toContain('@supports (backdrop-filter: blur(20px))')
+  })
+})
+
 describe('shared control accessibility', () => {
   it('keeps button targets usable and disabled controls visibly inactive', () => {
     const style = document.createElement('style')

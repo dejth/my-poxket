@@ -9,7 +9,7 @@ import {
 } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CategoriesPage } from './CategoriesPage'
 import { CreditCardsPage } from './CreditCardsPage'
@@ -25,7 +25,13 @@ const session = {
   user: { role: 'owner' as const, username: 'fictional-owner' },
 }
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-20T12:00:00+07:00'))
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   vi.unstubAllGlobals()
 })
@@ -552,12 +558,21 @@ describe('finance pages', () => {
     })
     renderPage(<DashboardPage />)
 
+    await screen.findByRole('heading', { name: 'ภาพรวม' })
     expect(
-      await screen.findByRole('heading', {
-        name: 'กิจกรรมเดือน กันยายน 2569',
-      }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('-฿1,000.00')).toBeInTheDocument()
+      (await screen.findByText('ดูรายละเอียดการใช้จ่ายและหมวดหมู่'))
+        .parentElement,
+    ).not.toHaveAttribute('open')
+    expect(
+      screen.getByText('ดูประวัติการจ่ายและรายการยกเลิก').parentElement,
+    ).not.toHaveAttribute('open')
+    const cashHero = screen.getByRole('region', { name: 'เงินเข้า − เงินออก' })
+    expect(within(cashHero).getByText('-฿1,000.00')).toBeVisible()
+    fireEvent.click(screen.getByText('ดูรายละเอียดการใช้จ่ายและหมวดหมู่'))
+    fireEvent.click(screen.getByText('ดูประวัติการจ่ายและรายการยกเลิก'))
+    expect(
+      screen.getByRole('heading', { name: 'กิจกรรมเดือน กันยายน 2569' }),
+    ).toBeVisible()
     expect(screen.getByText('อาหารสมมติ')).toBeInTheDocument()
     expect(screen.getByText('เดินทางสมมติ')).toBeInTheDocument()
     expect(screen.getByText('75%')).toBeInTheDocument()
@@ -569,7 +584,7 @@ describe('finance pages', () => {
     expect(screen.getByText('เกินกำหนด')).toBeInTheDocument()
     expect(screen.getByText('แผนผ่อนสมมติ')).toBeInTheDocument()
     expect(screen.getByText('ปิดยอดสมมติ')).toBeInTheDocument()
-    expect(screen.getByText('รอบบัญชี 2026-09-17')).toHaveClass(
+    expect(screen.getByText('บิลรอบ 17 ก.ย. 2569')).toHaveClass(
       'source-badge',
       'is-credit_card_statement',
     )
@@ -577,11 +592,15 @@ describe('finance pages', () => {
       'source-badge',
       'is-installment',
     )
-    expect(screen.getByText('ประจำ 2026-10')).toHaveClass(
-      'source-badge',
-      'is-recurring',
-    )
-    expect(screen.getByText('วางแผน 30 ก.ย. 2569')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: 'ยอดที่ต้องจ่าย' })).getByText(
+        'รายเดือน',
+      ),
+    ).toHaveClass('source-badge', 'is-recurring')
+    expect(screen.queryByText('วางแผน 30 ก.ย. 2569')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('อิงวันที่ปัจจุบัน แยกจากเดือนที่เลือกดูรายรับรายจ่าย'),
+    ).toBeInTheDocument()
     expect(screen.getByText('ครบกำหนด 1 ต.ค. 2569')).toBeInTheDocument()
     expect(screen.getByText('จ่ายแล้ว')).toBeInTheDocument()
     expect(screen.getByText('ยกเลิก')).toBeInTheDocument()
@@ -594,9 +613,9 @@ describe('finance pages', () => {
     )
 
     const headings = [
-      'กิจกรรมเดือน กันยายน 2569',
       'ยอดที่ต้องจ่าย',
       'รายการล่าสุดในเดือนนี้',
+      'กิจกรรมเดือน กันยายน 2569',
       'สัดส่วนรายจ่าย',
       'กระแสเงินสด',
       'ประวัติเดือนนี้',
@@ -623,6 +642,43 @@ describe('finance pages', () => {
     expect(
       screen.queryByRole('dialog', { name: 'บัตรตัวอย่าง •••• 1234' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('keeps overview bills short and reveals the remaining obligations on request', async () => {
+    stubFinanceFetch({
+      categories: [],
+      transactions: [],
+      summary: {
+        ...emptyDashboardSummary(),
+        payables: Array.from({ length: 6 }, (_, index) => ({
+          id: `fictional-payable-${index}`,
+          title: `รายการค้างสมมติ ${index + 1}`,
+          amountMinor: '10000',
+          context: 'ประจำ 2026-09',
+          dueDate: '2026-09-25',
+          source: 'recurring',
+          status: 'unpaid',
+        })),
+      },
+    })
+    renderPage(<DashboardPage />)
+    expect(await screen.findByText('รายการค้างสมมติ 4')).toBeVisible()
+    expect(screen.queryByText('รายการค้างสมมติ 5')).not.toBeInTheDocument()
+    const more = screen.getByRole('button', {
+      name: 'ดูบิลค้างและใกล้ถึงกำหนดทั้งหมด 6 รายการ',
+    })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(more)
+    expect(screen.getByText('รายการค้างสมมติ 6')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'แสดงน้อยลง' }))
+    expect(screen.queryByText('รายการค้างสมมติ 5')).not.toBeInTheDocument()
+    for (const name of [
+      'รายรับรายจ่าย',
+      'บัตรเครดิต',
+      'รายการผ่อน',
+      'รายจ่ายประจำ',
+    ])
+      expect(screen.getByRole('link', { name: new RegExp(name) })).toBeVisible()
   })
 
   it('shows clear empty dashboard states', async () => {
@@ -771,7 +827,7 @@ describe('finance pages', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows card rules and keeps official and planned payment dates distinct', async () => {
+  it('shows card rules and shows statement periods and actual payments', async () => {
     const inactiveCard = {
       ...fictionalCard,
       id: '44444444-4444-4444-8444-444444444444',
@@ -791,7 +847,8 @@ describe('finance pages', () => {
           officialDueDate: '2026-10-01',
           paidAmountMinor: null,
           paidDate: null,
-          plannedPaymentDate: '2026-09-30',
+          statementStartDate: '2026-08-18',
+          items: [],
           purchaseCount: 1,
           statementEndDate: '2026-09-17',
           status: 'unpaid',
@@ -804,7 +861,8 @@ describe('finance pages', () => {
           officialDueDate: '2026-09-01',
           paidAmountMinor: '25000',
           paidDate: '2026-08-30',
-          plannedPaymentDate: '2026-08-30',
+          statementStartDate: '2026-07-18',
+          items: [],
           purchaseCount: 2,
           statementEndDate: '2026-08-17',
           status: 'paid',
@@ -822,7 +880,7 @@ describe('finance pages', () => {
       screen.getByText('ปิดใช้งาน', { selector: '.status-label' }),
     ).toBeInTheDocument()
     expect(screen.getAllByText('กำหนดชำระตามบัตร')).toHaveLength(3)
-    expect(screen.getAllByText('วันที่วางแผนชำระ')).toHaveLength(3)
+    expect(screen.queryByText('วันที่วางแผนชำระ')).not.toBeInTheDocument()
     expect(screen.getAllByText('ยังไม่จ่าย')).toHaveLength(2)
     expect(screen.getAllByText('จ่ายแล้ว')).toHaveLength(2)
     expect(screen.getAllByText('฿700.00')).toHaveLength(2)
@@ -834,6 +892,90 @@ describe('finance pages', () => {
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'ปิด' }))
     expect(add).toHaveFocus()
+  })
+
+  it('opens a bill, shows posting dates and generated items, and records payment directly', async () => {
+    stubFinanceFetch({
+      cards: [fictionalCard],
+      categories: [],
+      transactions: [],
+      statements: [
+        {
+          amountMinor: '90000',
+          cardId: fictionalCard.id,
+          cardName: fictionalCard.name,
+          maskedSuffix: null,
+          officialDueDate: '2026-10-01',
+          paidAmountMinor: null,
+          paidDate: null,
+          purchaseCount: 2,
+          statementStartDate: '2026-08-18',
+          statementEndDate: '2026-09-17',
+          status: 'unpaid',
+          items: [
+            {
+              id: 'fictional-purchase',
+              description: 'ซื้อก่อนตัดรอบ บันทึกหลังตัดรอบ',
+              amountMinor: '20000',
+              transactionDate: '2026-08-17',
+              postingDate: '2026-08-18',
+              source: 'transaction',
+              context: 'ครั้งเดียว',
+            },
+            {
+              id: 'fictional-recurring',
+              description: 'ค่าสมาชิกสมมติ',
+              amountMinor: '70000',
+              transactionDate: '2026-09-10',
+              postingDate: null,
+              source: 'recurring',
+              context: 'ประจำ 2026-09',
+            },
+          ],
+        },
+      ],
+    })
+    renderPage(<CreditCardsPage />)
+    fireEvent.click(
+      (
+        await screen.findAllByRole('button', { name: 'ดูบิล / บันทึกจ่าย' })
+      )[0]!,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'บิล บัตรตัวอย่าง' })
+    fireEvent.click(within(dialog).getByText('ดูรายการในบิล 2 รายการ'))
+    expect(within(dialog).getByText('ค่าสมาชิกสมมติ')).toBeVisible()
+    expect(
+      within(dialog).getByText(/ธนาคารบันทึก 18 ส.ค. 2569/),
+    ).toBeInTheDocument()
+    const amount = within(dialog).getByLabelText('ยอดที่จ่าย (บาท)')
+    expect(amount).toHaveValue('900.00')
+    fireEvent.change(within(dialog).getByLabelText('วันที่ชำระ'), {
+      target: { value: '2026-09-30' },
+    })
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'บันทึกว่าจ่ายแล้ว' }),
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(
+      vi.mocked(fetch).mock.calls.some(
+        ([url, init]) =>
+          (typeof url === 'string'
+            ? url
+            : url instanceof URL
+              ? url.href
+              : url.url
+          ).endsWith('/payment') &&
+          init?.body ===
+            JSON.stringify({
+              status: 'paid',
+              expectedAmountMinor: '90000',
+              paidAmount: '900.00',
+              paidDate: '2026-09-30',
+            }),
+      ),
+    ).toBe(true)
   })
 
   it('previews the installment end date and shows current paid state', async () => {
@@ -925,6 +1067,101 @@ describe('finance pages', () => {
       target: { value: '2025-10-05' },
     })
     expect(screen.getByText('งวดสุดท้าย 5 ก.ย. 2573')).toBeInTheDocument()
+  })
+
+  it('shows the actual tracked history when an existing plan starts at installment 19/48', async () => {
+    stubFinanceFetch({
+      categories: [],
+      transactions: [],
+      plans: [
+        {
+          categoryId: '11111111-1111-4111-8111-111111111111',
+          categoryName: 'สินเชื่อสมมติ',
+          createdAt: '2026-09-03T00:00:00.000Z',
+          updatedAt: '2026-09-03T00:00:00.000Z',
+          creditCardId: null,
+          creditCardMaskedSuffix: null,
+          creditCardName: null,
+          description: 'รถตัวอย่างเริ่มติดตามกลางสัญญา',
+          endDate: '2029-03-01',
+          firstPaymentDate: '2025-04-01',
+          id: '44444444-4444-4444-8444-444444444444',
+          paymentMethod: 'bank_transfer',
+          status: 'active',
+          totalAmountMinor: null,
+          totalInstallments: 48,
+          occurrences: Array.from({ length: 30 }, (_, index) => ({
+            amountMinor: '390000',
+            closesPlan: false,
+            dueDate: new Date(Date.UTC(2026, 9 + index, 1))
+              .toISOString()
+              .slice(0, 10),
+            id: `recorded-installment-${index + 19}`,
+            installmentNumber: index + 19,
+            paidAmountMinor: null,
+            paidDate: null,
+            status: 'unpaid',
+          })),
+        },
+      ],
+    })
+    renderPage(<InstallmentsPage />)
+    expect(
+      await screen.findByText('รถตัวอย่างเริ่มติดตามกลางสัญญา'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('เริ่มติดตามงวด 19/48 · ไม่รวมประวัติก่อนหน้านี้'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('ชำระแล้วที่บันทึก')).toBeInTheDocument()
+    expect(screen.getByText('0 จาก 30 งวด')).toBeInTheDocument()
+    expect(screen.getByText('19/48 · ยังไม่จ่าย')).toBeInTheDocument()
+    expect(screen.getByText('ดูรายละเอียด 30 งวด')).toBeInTheDocument()
+    expect(screen.queryByText('ดูรายละเอียด 48 งวด')).not.toBeInTheDocument()
+    expect(screen.queryByText('งวด 1/48')).not.toBeInTheDocument()
+  })
+
+  it('labels an older unpaid recurring occurrence without calling it the current month', async () => {
+    const occurrence = {
+      amountMinor: '120000',
+      categoryId: '11111111-1111-4111-8111-111111111111',
+      categoryName: 'บ้านสมมติ',
+      creditCardId: null,
+      creditCardMaskedSuffix: null,
+      creditCardName: null,
+      description: 'ค่าบ้านสมมติ',
+      id: '88888888-8888-4888-8888-888888888888',
+      dueDate: '2026-08-01',
+      recurrencePeriod: '2026-08',
+      paymentMethod: 'bank_transfer',
+      paidAmountMinor: null,
+      paidDate: null,
+      status: 'unpaid',
+    }
+    stubFinanceFetch({
+      categories: [],
+      transactions: [],
+      recurring: [
+        {
+          ...occurrence,
+          id: '77777777-7777-4777-8777-777777777777',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          updatedAt: '2026-08-01T00:00:00.000Z',
+          recurrenceDay: 1,
+          startDate: '2026-08-01',
+          status: 'active',
+          occurrences: [occurrence],
+        },
+      ],
+    })
+    renderPage(<RecurringExpensesPage />)
+    expect(await screen.findByText('ค่าบ้านสมมติ')).toBeInTheDocument()
+    expect(screen.getByText('งวดที่ต้องจัดการ')).toBeInTheDocument()
+    expect(screen.queryByText('รายการเดือนปัจจุบัน')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: 'บันทึกว่าจ่ายแล้ว ค่าบ้านสมมติ ครบกำหนด 1 ส.ค. 2569',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('shows installment plans ten at a time', async () => {
@@ -1060,7 +1297,7 @@ describe('finance pages', () => {
     expect(await screen.findByText('บริการสมมติรายเดือน')).toBeInTheDocument()
     expect(screen.getByText(/กฎรายเดือน/)).toBeInTheDocument()
     expect(screen.getByText('ทำงานอยู่')).toBeInTheDocument()
-    expect(screen.getByText('รายการเดือนปัจจุบัน')).toBeInTheDocument()
+    expect(screen.getByText('งวดที่ต้องจัดการ')).toBeInTheDocument()
     expect(screen.queryByText(/\d+\/\d+/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('รายการรายเดือนที่สร้างแล้ว 3 รายการ'))
     expect(screen.getAllByText('ยังไม่จ่าย')).toHaveLength(2)

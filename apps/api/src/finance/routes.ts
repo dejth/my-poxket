@@ -64,15 +64,22 @@ const creditCardInputSchema = z.object({
     .optional(),
   name: z.string().min(1).max(100),
 })
-const transactionInputSchema = z.object({
-  amount: z.string().min(1).max(32),
-  categoryId: identifierSchema,
-  creditCardId: identifierSchema.nullish(),
-  description: z.string().min(1).max(255),
-  direction: directionSchema,
-  paymentMethod: paymentMethodSchema,
-  transactionDate: localDateSchema,
-})
+const transactionInputSchema = z
+  .object({
+    amount: z.string().min(1).max(32),
+    categoryId: identifierSchema,
+    creditCardId: identifierSchema.nullish(),
+    description: z.string().min(1).max(255),
+    direction: directionSchema,
+    paymentMethod: paymentMethodSchema,
+    transactionDate: localDateSchema,
+    postingDate: localDateSchema.nullish(),
+  })
+  .refine(
+    ({ postingDate, transactionDate, paymentMethod }) =>
+      !postingDate ||
+      (paymentMethod === 'credit_card' && postingDate >= transactionDate),
+  )
 const installmentPlanInputSchema = z.object({
   categoryId: identifierSchema,
   creditCardId: identifierSchema.nullish(),
@@ -152,6 +159,10 @@ const periodSchema = z
 const dashboardQuerySchema = z.object({ period: periodSchema })
 const statementPaymentSchema = z.discriminatedUnion('status', [
   z.object({
+    expectedAmountMinor: z
+      .string()
+      .regex(/^[1-9]\d*$/)
+      .max(32),
     paidAmount: z.string().min(1).max(32),
     paidDate: localDateSchema,
     status: z.literal('paid'),
