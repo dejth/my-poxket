@@ -39,5 +39,8 @@
     "prettier": "3.9.6",
     "typescript": "6.0.3",
     "typescript-eslint": "8.69.0"
+  },
+  "overrides": {
+    "glob": "14.0.2"
   }
 }

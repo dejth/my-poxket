@@ -113,19 +113,36 @@ export const starterCategories = [
 ] as const
 
 export async function initializeStarterCategories(database: Database) {
-  await database
-    .insert(categories)
-    .values(
-      starterCategories.map((category) => ({
-        ...category,
-        normalizedName: category.name.toLocaleLowerCase('th-TH'),
-      })),
-    )
-    .onDuplicateKeyUpdate({
-      // Preserve both ID/name collisions, including deactivated or renamed rows.
-      set: {
-        id: sql`${categories.id}`,
-        updatedAt: sql`${categories.updatedAt}`,
-      },
-    })
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await database
+        .insert(categories)
+        .values(
+          starterCategories.map((category) => ({
+            ...category,
+            normalizedName: category.name.toLocaleLowerCase('th-TH'),
+          })),
+        )
+        .onDuplicateKeyUpdate({
+          // Preserve both ID/name collisions, including deactivated or renamed rows.
+          set: {
+            id: sql`${categories.id}`,
+            updatedAt: sql`${categories.updatedAt}`,
+          },
+        })
+      return
+    } catch (error) {
+      const cause = error instanceof Error ? error.cause : undefined
+      // Concurrent idempotent inserts can deadlock; retry the whole statement.
+      if (
+        attempt >= 2 ||
+        typeof cause !== 'object' ||
+        cause === null ||
+        !('code' in cause) ||
+        cause.code !== 'ER_LOCK_DEADLOCK'
+      ) {
+        throw error
+      }
+    }
+  }
 }

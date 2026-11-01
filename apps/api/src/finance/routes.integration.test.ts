@@ -129,10 +129,9 @@ describeWithDatabase('finance API with MariaDB', () => {
       .from(categories)
       .where(eq(categories.id, existing.id))
 
-    await Promise.all([
-      initializeStarterCategories(database),
-      initializeStarterCategories(database),
-    ])
+    await Promise.all(
+      Array.from({ length: 10 }, () => initializeStarterCategories(database)),
+    )
     expect(await database.select().from(categories)).toHaveLength(
       starterCategories.length,
     )
